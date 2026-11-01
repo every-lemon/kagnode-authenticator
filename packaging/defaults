@@ -1,0 +1,6 @@
+# KagNode Authenticator compatibility package defaults to port 80.
+AUTHENTACTOR_HOST=0.0.0.0
+AUTHENTACTOR_PORT=80
+AUTHENTACTOR_DATA=/var/lib/authentactor
+# For a local TLS reverse proxy, bind to 127.0.0.1 on an unused backend port.
+# AUTHENTACTOR_TRUSTED_PROXY=127.0.0.1

@@ -1,0 +1,13 @@
+KagNode Authenticator
+Copyright (c) 2026 KagNode contributors
+
+Application source, tests and documentation: AGPL-3.0-only (LICENSE).
+KagNode marks and wordmarks: ARTWORK-LICENSE.
+The application retains the original Authentactor module, data location,
+backup-format identifier and API header for compatibility with existing vaults.
+
+Flask, cryptography, Waitress and Playwright are separate dependencies under
+their respective licenses. They are not vendored in this source tree.
+The optional Debian recipe bundles Waitress with its original license notice.
+Sample brand/account names identify fictional demo entries and do not imply
+endorsement by those brands. No real credentials are distributed.

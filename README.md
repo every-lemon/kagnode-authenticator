@@ -1,0 +1,101 @@
+<p align="center"><img src="assets/kagnode-wordmark.svg" width="540" alt="KagNode. Authenticator"></p>
+
+# KagNode Authenticator
+
+A self-hosted, single-owner vault for verification codes and passwords. KagNode's black-and-white interface, blue accents, rounded controls and mobile navigation surround the existing encrypted vault.
+
+**0.2.0 is a source preview.** It is a working personal vault, not a hosted KagNode account service or an independently audited password manager. Existing vault files and encrypted backups remain compatible.
+
+## Start locally
+
+Requires Python 3.10 or later.
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m authentactor \
+  --host 127.0.0.1 --port 8091 --data-dir ./preview-data --preview
+```
+
+Open [the local app](http://127.0.0.1:8091/) to create a master password, or [the sample vault](http://127.0.0.1:8091/demo) to explore fictional entries. No default password is supplied. Create the vault privately before exposing an uninitialized instance to anyone else. Use test credentials on HTTP; set up HTTPS before accessing real secrets over a network.
+
+When updating an existing installation, keep its existing `--data-dir` value. The Python module, `AUTHENTACTOR_HOST`, `AUTHENTACTOR_PORT`, `AUTHENTACTOR_DATA`, compatibility service name and default `/var/lib/authentactor` location are retained. This update does not relocate or reset a vault. Without explicit flags, the legacy command still binds `0.0.0.0:80`; the example above deliberately uses an unprivileged loopback port.
+
+## Pages with their own URLs
+
+| Path | Page |
+| --- | --- |
+| `/overview` | Vault overview and recent items |
+| `/authenticators` | Time-based verification codes |
+| `/passwords` | Saved logins |
+| `/favorites` | Starred entries |
+| `/generator` | Password generator |
+| `/security` | Password length, variety and reuse checks |
+| `/settings` | Automatic locking, master password and backups |
+| `/setup` | Create the first vault |
+| `/unlock` | Unlock an existing vault |
+| `/demo` | Fictional sample vault |
+
+Each section is a real server route. Links work directly and after refresh; browser Back/Forward follows navigation. A locked deep link returns to the requested section after setup or unlock. Redirect destinations are limited to known local pages. The demo serves an empty shell with fictional browser data; it never authorizes the vault API.
+
+## What works
+
+- TOTP from a Base32 setup key or `otpauth://totp/` link, including SHA1/SHA256/SHA512, 6/8 digits and 30/60-second periods. Accurate server time is required.
+- Password-only, authenticator-only or combined entries; favorites, search, sorting, grid/list views and quick search with Ctrl/Cmd+K.
+- Password generation with length and character controls. Security checks are local heuristics, not a breach-database lookup.
+- Optional website icons fetched directly by your server. Private/internal addresses, unsafe redirects and oversized responses are rejected. Letter icons work without a fetch.
+- Automatic lock after 5/15/30/60 idle minutes and an eight-hour maximum session lifetime.
+- Encrypted backup download and merge restore. Matching IDs are skipped; existing entries remain. Old backups need the password used when they were created.
+- Master-password rotation, which re-encrypts the vault and invalidates other sessions.
+- Dark/light themes, keyboard-operated select controls, mobile navigation, reduced-motion support, load skeletons and retry actions.
+
+## Storage and security
+
+The entire vault document is encrypted with Fernet before it enters SQLite. A fresh 16-byte salt and scrypt (`N=32768`, `r=8`, `p=1`) derive the key from the master password. The database contains the salt and ciphertext. Passwords and derived keys are not deliberately written to disk; active session keys exist in the server process's memory. This is **server-side encryption**, so a compromised running host can access an unlocked vault.
+
+The data directory is mode 0700 and the database mode 0600. Random session cookies are HttpOnly and SameSite=Strict, and are Secure when the app receives a trusted HTTPS request. Writes require JSON, same-origin checks and a CSRF token. No-store responses, CSP and frame protection apply to the app. Browser storage contains only the theme preference, never vault credentials.
+
+There is no master-password recovery, multi-user account system, cloud sync, browser autofill, QR scanning or hardware-key support. Keep encrypted backups and their corresponding passwords. Current limits are 1,000 entries, an 8 MB decrypted vault and 16 MB requests. See [SECURITY.md](SECURITY.md) for deployment and reporting details.
+
+## HTTPS reverse proxy
+
+Set up a valid TLS certificate on your proxy and forward **all paths**, including `/api/` and `/static/`, to this app. Do not rewrite every request to `/` or to `index.html`.
+
+For a proxy on the same machine, run the app with:
+
+```sh
+.venv/bin/python -m authentactor \
+  --host 127.0.0.1 --port 8091 --data-dir /path/to/existing-vault \
+  --trusted-proxy 127.0.0.1
+```
+
+Inside the HTTPS virtual host, an Nginx location can be:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8091;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 16m;
+}
+```
+
+`--trusted-proxy` (or `AUTHENTACTOR_TRUSTED_PROXY`) accepts one exact IP address. Forwarded host/scheme headers are ignored by default and from other peers. If your proxy runs on another machine, use its exact address and restrict backend access to it. The proxy must replace these headers, not append client-supplied values. This option creates neither a certificate nor a public listener on your proxy.
+
+## Development and checks
+
+```sh
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/pip install -r requirements-test.txt
+.venv/bin/python -m playwright install chromium
+.venv/bin/python tests/browser_smoke.py
+```
+
+The browser suite starts its own temporary loopback server and vault, then removes them. It does not connect to an owner's installation. The checks cover real setup/unlock, direct routes, history, item creation, custom selects, backups, failed loads, both themes and small screens. GitHub Actions runs the unit and browser checks. See [VERIFICATION.md](VERIFICATION.md) for scope and remaining limits.
+
+The compatibility Debian recipe in `packaging/` remains available for development. It preserves the existing `authentactor` package/service/data paths. It has not been installation-qualified for 0.2.0 and is not offered as a stable binary release. Runtime databases, backups and credentials are never included in source or packages.
+
+## Source and identity
+
+Application source is **AGPL-3.0-only**; see [LICENSE](LICENSE) and [NOTICE](NOTICE). KagNode artwork is covered separately by [ARTWORK-LICENSE](ARTWORK-LICENSE). The artwork terms do not restrict the rights granted by the software license or require a fork to retain KagNode branding.
