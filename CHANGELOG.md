@@ -1,5 +1,12 @@
 # Changes
 
+## 0.3.0 — source preview
+
+- Added encrypted backup codes, standalone or attached to existing items, and a dedicated `/backup-codes` route.
+- Added per-code reveal/copy, explicit Mark used and Mark available controls, usage dates and remaining counts.
+- Preserved code-use history on edits, encrypted backups, password rotation and restarts; retained older vault/backup compatibility.
+- Added validation, authorization, encryption, persistence and browser workflow checks.
+
 ## 0.2.0 — source preview
 
 - Added KagNode branding, dark/light themes, responsive navigation and custom choice controls.

@@ -26,10 +26,10 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from flask import Flask, g, jsonify, make_response, redirect, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 KDF = {"name": "scrypt", "n": 32768, "r": 8, "p": 1}
 COOKIE = "authentactor_session"
-PAGE_PATHS = ("/overview", "/authenticators", "/passwords", "/favorites", "/generator", "/security", "/settings")
+PAGE_PATHS = ("/overview", "/authenticators", "/passwords", "/backup-codes", "/favorites", "/generator", "/security", "/settings")
 
 
 class VaultError(Exception):
@@ -119,6 +119,41 @@ def password_strength(password):
     return "fair" if len(password) >= 12 and groups >= 2 else "weak"
 
 
+def clean_backup_codes(value, previous=()):
+    """Keep code text exact and preserve usage when a multiline edit is unchanged."""
+    if isinstance(value, str):
+        if len(value) > 51300:
+            raise VaultError("Save at most 100 backup codes, up to 512 characters each.")
+        value = [line.strip() for line in value.splitlines() if line.strip()]
+    if not isinstance(value, list) or len(value) > 100:
+        raise VaultError("Use one backup code per line, up to 100 codes per item.")
+    existing = {code["code"]: code for code in previous}
+    result, seen, identifiers = [], set(), set()
+    for entry in value:
+        text = entry.get("code") if isinstance(entry, dict) else entry
+        if not isinstance(text, str) or not text.strip() or len(text.strip()) > 512 or re.search(r"[\x00-\x1f\x7f]", text):
+            raise VaultError("Each backup code must be a single line of 1–512 characters.")
+        text = text.strip()
+        if text in seen:
+            raise VaultError("Remove duplicate backup codes before saving.")
+        seen.add(text)
+        metadata = entry if isinstance(entry, dict) else existing.get(text, {})
+        try:
+            identifier = str(uuid.UUID(metadata["id"])) if "id" in metadata else str(uuid.uuid4())
+        except (ValueError, TypeError, AttributeError):
+            raise VaultError("Invalid backup code identifier.")
+        used = metadata.get("used", False)
+        used_at = metadata.get("used_at")
+        if type(used) is not bool or (used_at is not None and (type(used_at) is not int or not 0 <= used_at <= 2**53)):
+            raise VaultError("Invalid backup code usage state.")
+        if identifier in identifiers:
+            raise VaultError("Backup code identifiers must be unique within an item.")
+        identifiers.add(identifier)
+        result.append({"id": identifier, "code": text, "used": used,
+                       "used_at": (used_at if used_at is not None else int(time.time())) if used else None})
+    return result
+
+
 def clean_item(data, previous=None):
     if not isinstance(data, dict):
         raise VaultError("Invalid vault item.")
@@ -132,8 +167,9 @@ def clean_item(data, previous=None):
     if len(password) > 1024 or len(username) > 256 or len(notes) > 8000:
         raise VaultError("An item field is too long.")
     otp, _ = parse_totp(data.get("secret", ""), data.get("algorithm", "SHA1"), data.get("digits", 6), data.get("period", 30))
-    if not password and not otp["secret"]:
-        raise VaultError("Add a password, an authenticator secret, or both.")
+    backup_codes = clean_backup_codes(data.get("backup_codes", previous.get("backup_codes", [])), previous.get("backup_codes", []))
+    if not password and not otp["secret"] and not backup_codes:
+        raise VaultError("Add a password, an authenticator secret, or backup codes.")
     icon = str(data.get("icon", ""))
     if icon:
         try:
@@ -145,7 +181,7 @@ def clean_item(data, previous=None):
             raise VaultError("The icon must be a small PNG, JPEG, GIF, WebP, or ICO image.")
     return {"id": previous.get("id", str(uuid.uuid4())), "name": name, "username": username,
             "url": normalize_url(data.get("url")), "password": password, **otp,
-            "notes": notes, "icon": icon, "favorite": bool(data.get("favorite", False)),
+            "notes": notes, "icon": icon, "favorite": bool(data.get("favorite", False)), "backup_codes": backup_codes,
             "created_at": previous.get("created_at", int(time.time())), "updated_at": int(time.time())}
 
 
@@ -469,9 +505,12 @@ def create_app(data_dir, preview=False):
         return jsonify(ok=True)
 
     def summary(item, counts, now):
-        public = {k: v for k, v in item.items() if k not in ("password", "secret")}
+        public = {k: v for k, v in item.items() if k not in ("password", "secret", "backup_codes")}
         public.update(has_password=bool(item["password"]), has_totp=bool(item["secret"]),
                       strength=password_strength(item["password"]), reused=bool(item["password"] and counts[item["password"]] > 1))
+        backup_codes = item.get("backup_codes", [])
+        public.update(has_backup_codes=bool(backup_codes), backup_codes_total=len(backup_codes),
+                      backup_codes_remaining=sum(not code["used"] for code in backup_codes))
         if item["secret"]:
             public.update(code=totp_code(item, now), expires_at=(int(now // item["period"]) + 1) * item["period"])
         return public
@@ -533,6 +572,26 @@ def create_app(data_dir, preview=False):
                 vault["items"][index] = clean_item(body, vault["items"][index])
             write_vault(vault, g.vault_session["key"])
         return jsonify(ok=True)
+
+    @app.post("/api/items/<item_id>/backup-codes/<code_id>/usage")
+    @authenticated
+    def backup_code_usage(item_id, code_id):
+        body = json_body()
+        if set(body) != {"used"} or type(body["used"]) is not bool:
+            raise VaultError("Choose whether this backup code has been used.")
+        with mutex:
+            vault = read_vault(g.vault_session["key"])
+            item = next((i for i in vault["items"] if i["id"] == item_id), None)
+            code = next((c for c in item.get("backup_codes", []) if c["id"] == code_id), None) if item else None
+            if code is None:
+                raise VaultError("Backup code not found.", 404)
+            if code["used"] != body["used"]:
+                code["used"] = body["used"]
+                code["used_at"] = int(time.time()) if code["used"] else None
+                item["updated_at"] = int(time.time())
+                write_vault(vault, g.vault_session["key"])
+            return jsonify(ok=True, used=code["used"], used_at=code["used_at"],
+                           remaining=sum(not c["used"] for c in item["backup_codes"]))
 
     @app.post("/api/parse-totp")
     @authenticated

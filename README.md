@@ -2,9 +2,9 @@
 
 # KagNode Authenticator
 
-A self-hosted, single-owner vault for verification codes and passwords. KagNode's black-and-white interface, blue accents, rounded controls and mobile navigation surround the existing encrypted vault.
+A self-hosted, single-owner vault for verification codes and passwords. KagNode's black-and-white interface, blue accents, rounded controls and mobile navigation surround the existing encrypted vault, with individually managed recovery codes.
 
-**0.2.0 is a source preview.** It is a working personal vault, not a hosted KagNode account service or an independently audited password manager. Existing vault files and encrypted backups remain compatible.
+**0.3.0 is a source preview.** It is a working personal vault, not a hosted KagNode account service or an independently audited password manager. Existing vault files and encrypted backups remain compatible.
 
 ## Start locally
 
@@ -28,6 +28,7 @@ When updating an existing installation, keep its existing `--data-dir` value. Th
 | `/overview` | Vault overview and recent items |
 | `/authenticators` | Time-based verification codes |
 | `/passwords` | Saved logins |
+| `/backup-codes` | Accounts with recovery codes and remaining counts |
 | `/favorites` | Starred entries |
 | `/generator` | Password generator |
 | `/security` | Password length, variety and reuse checks |
@@ -41,6 +42,7 @@ Each section is a real server route. Links work directly and after refresh; brow
 ## What works
 
 - TOTP from a Base32 setup key or `otpauth://totp/` link, including SHA1/SHA256/SHA512, 6/8 digits and 30/60-second periods. Accurate server time is required.
+- Backup-code-only items, or recovery codes alongside a password or authenticator. Paste one code per line, up to 100 per item. Reveal and copy codes individually; explicitly mark a code used after the service accepts it, or undo that mark. Copying and viewing never consume a code. Used codes remain visible with their usage date; copying one requires marking it available first.
 - Password-only, authenticator-only or combined entries; favorites, search, sorting, grid/list views and quick search with Ctrl/Cmd+K.
 - Password generation with length and character controls. Security checks are local heuristics, not a breach-database lookup.
 - Optional website icons fetched directly by your server. Private/internal addresses, unsafe redirects and oversized responses are rejected. Letter icons work without a fetch.
@@ -48,6 +50,14 @@ Each section is a real server route. Links work directly and after refresh; brow
 - Encrypted backup download and merge restore. Matching IDs are skipped; existing entries remain. Old backups need the password used when they were created.
 - Master-password rotation, which re-encrypts the vault and invalidates other sessions.
 - Dark/light themes, keyboard-operated select controls, mobile navigation, reduced-motion support, load skeletons and retry actions.
+
+## Backup codes
+
+Open **Backup codes → Add item**, enter the account name, and paste the service’s recovery codes one per line. You can also edit an existing item to attach codes. Spaces, hyphens and case inside each code are retained. Identical codes in the same item are rejected. Codes can be up to 512 characters each.
+
+Codes are encrypted inside the existing vault document, including their identifiers, used state and usage dates. Item lists return counts, not the codes themselves. Opening a detail view requires an unlocked vault. Locking clears revealed values and edit fields from the page. Nothing is sent to the account’s service; the used state is your own record.
+
+Editing an item preserves the state of unchanged codes. New codes start available, and omitted lines are removed when the edit is saved. Replacing a code set does not revoke the old codes at its service. Encrypted backups include codes and their used state; backups and vaults from 0.1/0.2 remain readable without a reset or database migration. Merge restore keeps existing item IDs unchanged.
 
 ## Storage and security
 
@@ -94,7 +104,7 @@ location / {
 
 The browser suite starts its own temporary loopback server and vault, then removes them. It does not connect to an owner's installation. The checks cover real setup/unlock, direct routes, history, item creation, custom selects, backups, failed loads, both themes and small screens. GitHub Actions runs the unit and browser checks. See [VERIFICATION.md](VERIFICATION.md) for scope and remaining limits.
 
-The compatibility Debian recipe in `packaging/` remains available for development. It preserves the existing `authentactor` package/service/data paths. It has not been installation-qualified for 0.2.0 and is not offered as a stable binary release. Runtime databases, backups and credentials are never included in source or packages.
+The compatibility Debian recipe in `packaging/` remains available for development. It preserves the existing `authentactor` package/service/data paths. It has not been installation-qualified for 0.3.0 and is not offered as a stable binary release. Runtime databases, backups and credentials are never included in source or packages.
 
 ## Source and identity
 

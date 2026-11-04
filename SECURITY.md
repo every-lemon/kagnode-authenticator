@@ -1,6 +1,6 @@
 # Security
 
-KagNode Authenticator 0.2.0 is a functional source preview. It has not had an independent security audit and should not yet be your sole store for irreplaceable credentials.
+KagNode Authenticator 0.3.0 is a functional source preview. It has not had an independent security audit and should not yet be your sole store for irreplaceable credentials.
 
 ## Deployment boundary
 
@@ -17,3 +17,5 @@ Only the theme preference is stored in browser localStorage. Unlocked credential
 Use the repository's **Security → Report a vulnerability** feature when it is enabled. Do not post passwords, authenticator seeds, vault databases, tokens or private infrastructure details in a public issue. If private reporting is unavailable, request a private contact without including exploit details or secrets.
 
 Ordinary UI and reproducible non-sensitive bugs can be reported in Issues. Include the app version, browser, route, steps and expected result, using a disposable demo vault.
+
+Backup codes are vault secrets, protected with the same encryption and session boundary as passwords. Lists expose only counts; detail reads expose codes to the unlocked owner. Marking a code used changes local vault state only and is not confirmation from the account service. No code, password or TOTP seed is added to browser storage.

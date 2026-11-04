@@ -78,6 +78,7 @@ const titles = {
   overview: ['Your vault', 'Your codes and saved logins, together.'],
   authenticators: ['Authenticators', 'Your verification codes, ready when you need them.'],
   passwords: ['Passwords', 'Find a saved login or add a new one.'],
+  'backup-codes': ['Backup codes', 'Recovery codes for when your usual sign-in method is unavailable.'],
   favorites: ['Favorites', 'The accounts you reach for most.'],
   generator: ['Password generator', 'Create a different password for every account.'],
   security: ['Security check', 'Review password length, variety, and reuse.'],
@@ -236,7 +237,7 @@ async function refreshItems() {
     throw error;
   } finally { state.loadingItems = false; $('items').removeAttribute('aria-busy'); }
   renderStats();
-  if (['overview', 'authenticators', 'passwords', 'favorites'].includes(state.view)) renderItems();
+  if (['overview', 'authenticators', 'passwords', 'backup-codes', 'favorites'].includes(state.view)) renderItems();
   if (state.view === 'security') renderSecurity();
   $('auto-lock').value = String(state.settings.auto_lock);
   window.KagNodeControls?.sync();
@@ -256,6 +257,8 @@ function renderStats() {
   $('launch-totp-count').textContent = otp.length + ' ' + (otp.length === 1 ? 'account' : 'accounts');
   $('launch-password-count').textContent = pw.length + ' ' + (pw.length === 1 ? 'password' : 'passwords');
   $('nav-password-count').textContent = pw.length;
+  $('nav-backup-count').textContent = items.filter(i => i.has_backup_codes).length;
+  $('filter-backup').textContent = items.filter(i => i.has_backup_codes).length;
   $('security-dot').hidden = !pw.some(i => i.strength === 'weak' || i.reused);
   $('filter-all').textContent = items.length;
   $('filter-totp').textContent = otp.length;
@@ -272,7 +275,7 @@ function navigate(view, options = {}) {
   state.view = view;
   document.querySelector('.main').classList.toggle('is-overview', view === 'overview');
   $('workspace-cards').hidden = view !== 'overview';
-  state.filter = view === 'authenticators' ? 'totp' : view === 'passwords' ? 'password' : 'all';
+  state.filter = view === 'authenticators' ? 'totp' : view === 'passwords' ? 'password' : view === 'backup-codes' ? 'backup' : 'all';
   const [title, subtitle] = titles[view];
   $('page-title').textContent = title;
   $('page-subtitle').textContent = subtitle;
@@ -287,7 +290,7 @@ function navigate(view, options = {}) {
   document.querySelectorAll('a[data-view]').forEach(link => {
     link.href = pagePaths[link.dataset.view] + (state.demo ? '?demo=1' : '');
   });
-  const vault = ['overview', 'authenticators', 'passwords', 'favorites'].includes(view);
+  const vault = ['overview', 'authenticators', 'passwords', 'backup-codes', 'favorites'].includes(view);
   $('vault-view').hidden = !vault;
   $('generator-view').hidden = view !== 'generator';
   $('security-view').hidden = view !== 'security';
@@ -296,7 +299,7 @@ function navigate(view, options = {}) {
   $('vault-add-button').hidden = view !== 'overview';
   $('stats').hidden = view !== 'overview';
   $('filters').hidden = view !== 'overview';
-  $('items-heading').firstChild.textContent = view === 'overview' ? 'All vault items ' : view === 'favorites' ? 'Your favorites ' : 'Your ' + view + ' ';
+  $('items-heading').firstChild.textContent = view === 'overview' ? 'All vault items ' : view === 'favorites' ? 'Your favorites ' : view === 'backup-codes' ? 'Your backup codes ' : 'Your ' + view + ' ';
   $('search').value = '';
   if (vault) renderItems();
   if (view === 'generator') generate().catch(e => toast(e.message, true));
@@ -335,22 +338,30 @@ function timer(item) {
 
 function renderItems() {
   if (state.loadingItems) return;
-  let items = state.items.filter(i => state.view !== 'favorites' || i.favorite).filter(i => state.filter === 'all' || (state.filter === 'totp' ? i.has_totp : i.has_password));
+  let items = state.items.filter(i => state.view !== 'favorites' || i.favorite).filter(i => state.filter === 'all' || (state.filter === 'totp' ? i.has_totp : state.filter === 'backup' ? i.has_backup_codes : i.has_password));
   const search = $('search').value.trim().toLowerCase();
   items = items.filter(i => [i.name, i.username, i.url].some(v => String(v).toLowerCase().includes(search)));
   items.sort((a, b) => $('sort').value === 'recent' ? b.updated_at - a.updated_at : a.name.localeCompare(b.name));
   $('items').classList.toggle('list-layout', !state.grid);
-  $('items').innerHTML = items.map(i => `<article class="item-card" data-id="${esc(i.id)}"><div class="item-card-heading">${logo(i)}<button class="item-title" data-action="detail"><strong>${esc(i.name)}</strong><small>${esc(i.username||domain(i.url)||'Personal account')}</small></button><button class="icon-button ${i.favorite?'favorite-active':''}" data-action="favorite" aria-label="${i.favorite?'Remove from':'Add to'} favorites" aria-pressed="${i.favorite}">${svg('star')}</button></div>${i.has_totp?`<div class="code-area"><button class="code-text" data-code="${esc(i.id)}" data-action="copy-code" aria-label="Copy ${esc(i.name)} verification code">${formatCode(i.code)}</button><div class="code-side"><button class="icon-button" data-action="copy-code" aria-label="Copy verification code">${svg('copy')}</button>${timer(i)}</div></div><div class="item-type-line">${svg('fingerprint')}Verification code · ${i.period}s${i.has_password?'<span class="pill">'+svg('key')+' Password saved</span>':''}</div>`:`<div class="code-area password-area"><button class="code-text" data-action="copy-password" aria-label="Copy ${esc(i.name)} password">••••••••••••</button><div class="code-side"><button class="icon-button" data-action="copy-password" aria-label="Copy password">${svg('copy')}</button></div></div><div class="item-type-line">${svg('key')}Password<span class="pill ${i.strength==='strong'?'green':i.strength}">${esc(i.strength?.charAt(0).toUpperCase()+i.strength?.slice(1))}</span></div>`}<div class="item-card-footer">${i.url?`<a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${svg('globe')}${esc(domain(i.url))}</a>`:'<span>App account</span>'}<button class="text-button" data-action="detail">View details ${svg('arrow-right')}</button></div></article>`).join('');
+  $('items').innerHTML = items.map(i => `<article class="item-card" data-id="${esc(i.id)}"><div class="item-card-heading">${logo(i)}<button class="item-title" data-action="detail"><strong>${esc(i.name)}</strong><small>${esc(i.username||domain(i.url)||'Personal account')}</small></button><button class="icon-button ${i.favorite?'favorite-active':''}" data-action="favorite" aria-label="${i.favorite?'Remove from':'Add to'} favorites" aria-pressed="${i.favorite}">${svg('star')}</button></div>${itemCredentials(i)}<div class="item-card-footer">${i.url?`<a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${svg('globe')}${esc(domain(i.url))}</a>`:'<span>App account</span>'}<button class="text-button" data-action="detail">View details ${svg('arrow-right')}</button></div></article>`).join('');
   $('empty').hidden = items.length > 0;
   $('items-footer').hidden = !items.length;
   $('item-count').textContent = items.length;
   $('results-label').textContent = `Showing ${items.length} ${items.length===1?'item':'items'}`;
   const isSearch = search.length > 0 || state.items.length > 0;
   $('empty-title').textContent = isSearch ? (search ? 'No matching items.' : state.view === 'favorites' ? 'Keep your favorites close.' : 'Nothing here just yet.') : 'Make yourself at home.';
-  $('empty-description').innerHTML = search ? 'Try another name, account, or website.' : state.view === 'favorites' ? 'Tap the star on an item to keep it here.' : 'Add an authenticator or saved login to get started.';
+  $('empty-description').innerHTML = search ? 'Try another name, account, or website.' : state.view === 'favorites' ? 'Tap the star on an item to keep it here.' : 'Add an authenticator, saved login, or backup codes to get started.';
   $('empty-add').hidden = !!search || state.view === 'favorites';
   document.querySelectorAll('[data-filter]').forEach(e => e.classList.toggle('active', e.dataset.filter === state.filter));
   tickTimers();
+}
+
+function itemCredentials(i) {
+  let content = '';
+  if (i.has_totp) content = `<div class="code-area"><button class="code-text" data-code="${esc(i.id)}" data-action="copy-code" aria-label="Copy ${esc(i.name)} verification code">${formatCode(i.code)}</button><div class="code-side"><button class="icon-button" data-action="copy-code" aria-label="Copy verification code">${svg('copy')}</button>${timer(i)}</div></div><div class="item-type-line">${svg('fingerprint')}Verification code · ${i.period}s${i.has_password?'<span class="pill">Password saved</span>':''}</div>`;
+  else if (i.has_password) content = `<div class="code-area password-area"><button class="code-text" data-action="copy-password" aria-label="Copy ${esc(i.name)} password">••••••••••••</button><button class="icon-button" data-action="copy-password" aria-label="Copy password">${svg('copy')}</button></div><div class="item-type-line">${svg('key')}Password<span class="pill ${esc(i.strength)}">${esc(i.strength?.charAt(0).toUpperCase()+i.strength?.slice(1))}</span></div>`;
+  if (i.has_backup_codes) content += `<button class="backup-summary" data-action="detail">${svg('shield-check')}<span>${i.backup_codes_remaining} of ${i.backup_codes_total} backup codes available</span>${svg('arrow-right')}</button>`;
+  return content;
 }
 
 function tickTimers() {
@@ -460,14 +471,16 @@ async function itemAction(action, id) {
 
 function setItemType(type) {
   state.itemType = type;
-  for (const t of ['password', 'totp', 'both']) {
+  for (const t of ['password', 'totp', 'both', 'backup']) {
     $('type-' + t).classList.toggle('selected', type === t);
     $('type-' + t).setAttribute('aria-pressed', String(type === t));
   }
-  $('password-fields').hidden = type === 'totp';
-  $('totp-fields').hidden = type === 'password';
-  $('item-password').required = type !== 'totp';
-  $('item-secret').required = type !== 'password';
+  $('password-fields').hidden = !['password', 'both'].includes(type);
+  $('totp-fields').hidden = !['totp', 'both'].includes(type);
+  $('item-password').required = ['password', 'both'].includes(type);
+  $('item-secret').required = ['totp', 'both'].includes(type);
+  $('item-backup-codes').required = type === 'backup';
+  $('backup-optional').hidden = type === 'backup';
 }
 async function openItem(id = null, prefill = '') {
   if (state.demo) {
@@ -483,14 +496,15 @@ async function openItem(id = null, prefill = '') {
   $('save-item').innerHTML = (id ? 'Save changes' : 'Save item') + svg('arrow-right');
   showError('item-error', '');
   $('item-icon-preview').textContent = 'a';
-  setItemType(state.view === 'authenticators' ? 'totp' : 'password');
+  setItemType(state.view === 'authenticators' ? 'totp' : state.view === 'backup-codes' ? 'backup' : 'password');
   if (id) {
     try {
       const i = (await api('/items/' + id)).item;
       for (const field of ['name', 'username', 'url', 'password', 'secret', 'notes', 'algorithm', 'digits', 'period']) $('item-' + field).value = i[field];
       $('item-favorite').checked = i.favorite;
       state.itemIcon = i.icon;
-      setItemType(i.password && i.secret ? 'both' : i.secret ? 'totp' : 'password');
+      $('item-backup-codes').value = (i.backup_codes || []).map(c => c.code).join('\n');
+      setItemType(i.password && i.secret ? 'both' : i.secret ? 'totp' : i.password ? 'password' : 'backup');
       renderIconPreview();
     } catch (e) {
       toast(e.message, true);
@@ -538,11 +552,12 @@ async function saveItem(event) {
   btn.disabled = true;
   showError('item-error', '');
   try {
-    if (state.itemType !== 'password' && $('item-secret').value.toLowerCase().startsWith('otpauth://')) await parseSetupLink();
+    if (['totp', 'both'].includes(state.itemType) && $('item-secret').value.toLowerCase().startsWith('otpauth://')) await parseSetupLink();
     const data = {};
     for (const field of ['name', 'username', 'url', 'password', 'secret', 'notes', 'algorithm', 'digits', 'period']) data[field] = $('item-' + field).value;
-    if (state.itemType === 'password') data.secret = '';
-    if (state.itemType === 'totp') data.password = '';
+    if (!['totp', 'both'].includes(state.itemType)) data.secret = '';
+    if (!['password', 'both'].includes(state.itemType)) data.password = '';
+    data.backup_codes = $('item-backup-codes').value;
     data.favorite = $('item-favorite').checked;
     data.icon = state.itemIcon;
     await api(state.editId ? '/items/' + state.editId : '/items', state.editId ? 'PUT' : 'POST', data);
@@ -572,11 +587,44 @@ async function openDetail(id) {
     const i = state.demo ? demoDetails(id) : (await api('/items/' + id)).item;
     detailItem = i;
     const summary = state.items.find(x => x.id === id);
-    $('detail-content').innerHTML = `<div class="detail-hero">${logo(summary)}<div><h2>${esc(i.name)}</h2><p>${esc(i.username||'Personal account')}</p></div><button class="icon-button close-dialog" aria-label="Close">${svg('x')}</button></div><div class="detail-body">${i.username?detailRow('Account',i.username,'username'):''}${i.url?detailRow('Website',i.url,'url'):''}${i.password?`<div class="detail-row"><label>Password</label><div><output id="detail-password" class="secret-value">••••••••••••••••</output><button class="icon-button" id="detail-reveal" aria-label="Show password">${svg('eye')}</button><button class="icon-button" data-detail-copy="password" aria-label="Copy password">${svg('copy')}</button></div></div>`:''}${i.secret?`<div class="detail-row"><label>Verification code · ${esc(i.algorithm)} · ${i.period}s</label><div><button class="code-text" data-code="${esc(i.id)}" data-detail-code="${esc(i.id)}" aria-label="Copy verification code">${formatCode(summary.code)}</button><div class="code-side">${timer(summary)}</div><button class="icon-button" data-detail-code="${esc(i.id)}" aria-label="Copy verification code">${svg('copy')}</button></div></div>`:''}${i.notes?`<div class="detail-row"><label>Notes</label><output>${esc(i.notes)}</output></div>`:''}<p class="small-note">Updated ${esc(new Date(i.updated_at*1000).toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'}))}</p></div><div class="modal-footer"><button class="button danger small" id="detail-delete">${svg('trash')}Delete item</button><button class="button secondary small" id="detail-edit">${svg('edit')}Edit item</button></div>`;
+    $('detail-content').innerHTML = `<div class="detail-hero">${logo(summary)}<div><h2>${esc(i.name)}</h2><p>${esc(i.username||'Personal account')}</p></div><button class="icon-button close-dialog" aria-label="Close">${svg('x')}</button></div><div class="detail-body">${i.username?detailRow('Account',i.username,'username'):''}${i.url?detailRow('Website',i.url,'url'):''}${i.password?`<div class="detail-row"><label>Password</label><div><output id="detail-password" class="secret-value">••••••••••••••••</output><button class="icon-button" id="detail-reveal" aria-label="Show password">${svg('eye')}</button><button class="icon-button" data-detail-copy="password" aria-label="Copy password">${svg('copy')}</button></div></div>`:''}${i.secret?`<div class="detail-row"><label>Verification code · ${esc(i.algorithm)} · ${i.period}s</label><div><button class="code-text" data-code="${esc(i.id)}" data-detail-code="${esc(i.id)}" aria-label="Copy verification code">${formatCode(summary.code)}</button><div class="code-side">${timer(summary)}</div><button class="icon-button" data-detail-code="${esc(i.id)}" aria-label="Copy verification code">${svg('copy')}</button></div></div>`:''}${backupCodeDetails(i)}${i.notes?`<div class="detail-row"><label>Notes</label><output>${esc(i.notes)}</output></div>`:''}<p class="small-note">Updated ${esc(new Date(i.updated_at*1000).toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'}))}</p></div><div class="modal-footer"><button class="button danger small" id="detail-delete">${svg('trash')}Delete item</button><button class="button secondary small" id="detail-edit">${svg('edit')}Edit item</button></div>`;
     $('detail-dialog').showModal();
     tickTimers();
   } catch (e) {
     toast(e.message, true);
+  }
+}
+
+function backupCodeDetails(item) {
+  const codes = item.backup_codes || [];
+  if (!codes.length) return '';
+  const available = codes.filter(c => !c.used).length;
+  return `<section class="backup-details" aria-label="Backup codes"><div class="backup-details-heading"><h3>Backup codes</h3><span>${available} of ${codes.length} available</span></div><p class="small-note">Copying does not mark a code as used. After the service accepts it, mark it here.</p><div class="backup-code-list">${codes.map((c, index) => `<div class="backup-code-row ${c.used?'is-used':''}" data-backup-id="${esc(c.id)}"><span class="backup-code-number">${index+1}</span><output class="backup-code-value" aria-label="Backup code ${index+1}">•••• •••• ••••</output><div class="backup-code-actions"><button type="button" class="icon-button" data-backup-action="reveal" aria-label="Show backup code ${index+1}" aria-pressed="false">${svg('eye')}</button><button type="button" class="icon-button" data-backup-action="copy" aria-label="Copy backup code ${index+1}" ${c.used?'disabled':''}>${svg('copy')}</button><button type="button" class="button secondary small backup-usage" data-backup-action="usage" aria-label="${c.used?'Mark available':'Mark used'} backup code ${index+1}">${svg(c.used?'refresh':'check')}<span>${c.used?'Mark available':'Mark used'}</span></button></div><span class="backup-code-status">${c.used?'Used'+(c.used_at?' · '+esc(new Date(c.used_at*1000).toLocaleDateString()):''):'Available'}</span></div>`).join('')}</div></section>`;
+}
+
+async function backupCodeAction(button) {
+  const item = detailItem, row = button.closest('[data-backup-id]');
+  const code = item?.backup_codes?.find(c => c.id === row.dataset.backupId);
+  if (!code) return;
+  const action = button.dataset.backupAction;
+  if (action === 'reveal') {
+    const show = button.getAttribute('aria-pressed') !== 'true';
+    row.querySelector('output').textContent = show ? code.code : '•••• •••• ••••';
+    button.setAttribute('aria-pressed', String(show));
+    const number = row.querySelector('.backup-code-number').textContent;
+    button.setAttribute('aria-label', `${show?'Hide':'Show'} backup code ${number}`);
+    button.innerHTML = svg(show ? 'eye-off' : 'eye');
+  } else if (action === 'copy' && !code.used) await copy(code.code, 'Backup code copied; mark it used after signing in');
+  else if (action === 'usage') {
+    if (state.demo) { toast('Sample codes stay unchanged in the demo vault.'); return; }
+    button.disabled = true;
+    try {
+      await api(`/items/${item.id}/backup-codes/${code.id}/usage`, 'POST', {used: !code.used});
+      if (detailItem?.id === item.id && $('detail-dialog').open) await openDetail(item.id);
+      await refreshItems();
+      toast(code.used ? 'Backup code marked available' : 'Backup code marked used');
+    } catch (error) { toast(error.message, true); }
+    finally { button.disabled = false; }
   }
 }
 
@@ -740,6 +788,7 @@ function demoDetails(id) {
     password: i.has_password ? demoSecretPassword : '',
     secret: i.has_totp ? 'JBSWY3DPEHPK3PXP' : '',
     algorithm: 'SHA1',
+    backup_codes: i.has_backup_codes ? [{id: 'sample-1', code: 'DEMO-1234-5678', used: false, used_at: null}, {id: 'sample-2', code: 'DEMO-8765-4321', used: true, used_at: 1700000000}] : [],
     notes: 'Sample item for exploring KagNode Authenticator. This is not a real account.'
   };
 }
@@ -772,6 +821,9 @@ async function startDemo() {
     url: 'https://' + s[2],
     has_totp: s[3],
     has_password: s[4],
+    has_backup_codes: j === 1,
+    backup_codes_total: j === 1 ? 2 : 0,
+    backup_codes_remaining: j === 1 ? 1 : 0,
     favorite: s[5],
     demoColor: s[6],
     icon: '',
@@ -864,7 +916,7 @@ function bind() {
     const button = e.target.closest('[data-action]');
     if (button) itemAction(button.dataset.action, button.closest('[data-id]').dataset.id);
   });
-  for (const type of ['password', 'totp', 'both']) $('type-' + type).addEventListener('click', () => setItemType(type));
+  for (const type of ['password', 'totp', 'both', 'backup']) $('type-' + type).addEventListener('click', () => setItemType(type));
   $('item-form').addEventListener('submit', saveItem);
   $('item-name').addEventListener('input', renderIconPreview);
   $('item-url').addEventListener('input', () => {
@@ -942,6 +994,8 @@ function bind() {
     }
   });
   $('detail-content').addEventListener('click', e => {
+    const backupButton = e.target.closest('[data-backup-action]');
+    if (backupButton) backupCodeAction(backupButton).catch(error => toast(error.message, true));
     const copyBtn = e.target.closest('[data-detail-copy]');
     if (copyBtn && detailItem) copy(detailItem[copyBtn.dataset.detailCopy], 'Copied');
     const code = e.target.closest('[data-detail-code]');
@@ -965,6 +1019,7 @@ function bind() {
   $('item-dialog').addEventListener('close', () => {
     $('item-password').value = '';
     $('item-secret').value = '';
+    $('item-backup-codes').value = '';
     $('item-notes').value = '';
     state.itemIcon = '';
   });

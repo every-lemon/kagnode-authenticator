@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "test-artifacts"
-VIEWS = ("overview", "authenticators", "passwords", "favorites", "generator", "security", "settings")
+VIEWS = ("overview", "authenticators", "passwords", "backup-codes", "favorites", "generator", "security", "settings")
 PASSWORD = "Only-for-disposable-browser-tests!2048"
 
 
@@ -62,6 +62,7 @@ def check(browser, base):
     page.locator("#item-name").fill("KagNode QA account")
     page.locator("#item-username").fill("example@example.test")
     page.locator("#item-secret").fill("JBSWY3DPEHPK3PXP")
+    page.locator("#item-backup-codes").fill("QA-RECOVERY-1234\nQA-RECOVERY-5678")
     page.locator("details.advanced summary").click()
     page.get_by_role("combobox", name="Digits", exact=True).click()
     page.get_by_role("option", name="8 digits", exact=True).click()
@@ -71,6 +72,28 @@ def check(browser, base):
     assert len(page.locator(".code-text").first.inner_text().replace(" ", "")) == 8
     page.reload()
     page.locator(".item-title").filter(has_text="KagNode QA account").wait_for()
+    page.locator(".item-title").filter(has_text="KagNode QA account").click()
+    assert "QA-RECOVERY-1234" not in page.locator("#detail-content").inner_text()
+    page.get_by_role("button", name="Show backup code 1", exact=True).click()
+    assert page.locator(".backup-code-value").first.inner_text() == "QA-RECOVERY-1234"
+    page.evaluate("Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText:async text=>window.__lastCopied=text,readText:async()=>window.__lastCopied}})")
+    page.get_by_role("button", name="Copy backup code 1", exact=True).click()
+    page.wait_for_function('window.__lastCopied === "QA-RECOVERY-1234"')
+    assert page.locator(".backup-details-heading span").inner_text() == "2 of 2 available"
+    page.get_by_role("button", name="Mark used backup code 1", exact=True).click()
+    page.locator(".backup-details-heading span").filter(has_text="1 of 2 available").wait_for()
+    assert page.get_by_role("button", name="Copy backup code 1", exact=True).is_disabled()
+    page.get_by_role("button", name="Mark available backup code 1", exact=True).click()
+    page.locator(".backup-details-heading span").filter(has_text="2 of 2 available").wait_for()
+    page.get_by_role("button", name="Mark used backup code 1", exact=True).click()
+    page.locator(".backup-details-heading span").filter(has_text="1 of 2 available").wait_for()
+    page.locator("#detail-edit").click()
+    page.locator("#item-dialog").wait_for(state="visible")
+    assert page.locator("#item-backup-codes").input_value() == "QA-RECOVERY-1234\nQA-RECOVERY-5678"
+    page.locator("#item-notes").fill("An unrelated edit keeps code usage")
+    page.locator("#save-item").click()
+    page.locator("#item-dialog").wait_for(state="hidden")
+    page.locator(".backup-summary").filter(has_text="1 of 2 backup codes available").wait_for()
     page.locator('nav a[data-view="settings"]').click()
     page.wait_for_url("**/settings")
     page.go_back()
@@ -98,6 +121,34 @@ def check(browser, base):
     page.get_by_text("0 items restored; 1 already present.", exact=True).wait_for()
     backup.unlink()  # Even synthetic encrypted vaults do not belong in artifacts.
 
+    page.locator('nav a[data-view="backup-codes"]').click()
+    page.wait_for_url("**/backup-codes")
+    page.locator("#add-button").click()
+    assert page.locator("#type-backup").get_attribute("aria-pressed") == "true"
+    page.locator("#item-name").fill("Recovery-only example")
+    page.locator("#item-backup-codes").fill("LONG-"+"1234567890"*8+"\nSECOND-RECOVERY-4321")
+    page.locator("#save-item").click()
+    page.locator("#item-dialog").wait_for(state="hidden")
+    card = page.locator(".item-card").filter(has_text="Recovery-only example")
+    card.wait_for()
+    card.locator(".item-title").click()
+    page.get_by_role("button", name="Show backup code 1", exact=True).click()
+    for theme in ("dark", "light"):
+        page.evaluate("theme=>document.documentElement.dataset.theme=theme", theme)
+        for width in (1440, 390, 320):
+            page.set_viewport_size({"width":width,"height":900 if width==1440 else 844})
+            assert page.evaluate("document.documentElement.scrollWidth") <= width+1
+            assert page.locator("#detail-dialog").evaluate("d=>d.scrollWidth<=d.clientWidth+1")
+            page.screenshot(path=str(ARTIFACTS/f"backup-codes-{theme}-{width}.png"))
+    page.set_viewport_size({"width":1440,"height":1000})
+    for number in (1,2):
+        page.get_by_role("button", name=f"Mark used backup code {number}", exact=True).click()
+        page.locator(".backup-details-heading span").filter(has_text=f"{2-number} of 2 available").wait_for()
+    page.locator("#detail-content .close-dialog").click()
+    page.reload()
+    page.locator(".item-card").filter(has_text="Recovery-only example").locator(".backup-summary").filter(has_text="0 of 2").wait_for()
+    page.locator('nav a[data-view="settings"]').click()
+
     page.locator("#change-master").click()
     page.locator("#current-master").fill(PASSWORD)
     changed = PASSWORD + "-changed"
@@ -108,6 +159,8 @@ def check(browser, base):
     page.locator("#lock-button").click()
     page.wait_for_url("**/unlock?next=%2Fsettings")
     assert page.locator("#items .item-card").count() == 0
+    assert page.locator("#item-backup-codes").input_value() == ""
+    assert page.locator("#detail-content").inner_text() == ""
     page.locator("#master-password").fill(changed)
     page.locator(".auth-submit").click()
     page.wait_for_url("**/settings")
@@ -181,7 +234,7 @@ def check(browser, base):
         "direct routes and reload", "setup and unlock return paths", "Back/Forward", "8-digit TOTP entry",
         "keyboard choice controls", "backup/merge restore", "master password rotation", "lock clears DOM",
         "saved lock preference", "mobile menu and Escape", "centered loader and top strip", "vault skeleton",
-        "failed item load/retry", "failed initial load/retry", "small-screen form"]}
+        "failed item load/retry", "failed initial load/retry", "small-screen form", "backup code paste/reveal/copy", "explicit use and undo", "usage preserved by edits", "backup-code-only items", "backup code mobile layouts and depleted groups"]}
     (ARTIFACTS / "report.json").write_text(json.dumps(result, indent=2) + "\n")
     print(f"PASS: {len(layouts)} layouts and {len(result['workflows'])} workflows; no browser exceptions")
 
