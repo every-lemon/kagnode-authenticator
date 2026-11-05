@@ -4,7 +4,7 @@
 
 A self-hosted authenticator and password manager with separate encrypted vaults for email-based accounts. KagNode's black-and-white interface, blue accents, rounded controls and mobile navigation surround the existing encrypted vault, with individually managed recovery codes.
 
-**0.4.0 is a source preview.** It is a working personal vault, not a hosted KagNode account service or an independently audited password manager. Existing vault files and encrypted backups remain compatible.
+**0.4.1 is a source preview.** It is a working personal vault, not a hosted KagNode account service or an independently audited password manager. Existing vault files and encrypted backups remain compatible.
 
 ## Start locally
 
@@ -140,7 +140,7 @@ location / {
 
 The browser suite starts its own temporary loopback server and vault, then removes them. It does not connect to an owner's installation. The checks cover real setup/unlock, direct routes, history, item creation, custom selects, backups, failed loads, both themes and small screens. GitHub Actions runs the unit and browser checks. See [VERIFICATION.md](VERIFICATION.md) for scope and remaining limits.
 
-The compatibility Debian recipe in `packaging/` remains available for development. It preserves the existing `authentactor` package/service/data paths. It has not been installation-qualified for 0.4.0 and is not offered as a stable binary release. Runtime databases, backups and credentials are never included in source or packages.
+The compatibility Debian recipe in `packaging/` remains available for development. It preserves the existing `authentactor` package/service/data paths. It has not been installation-qualified for 0.4.1 and is not offered as a stable binary release. Runtime databases, backups and credentials are never included in source or packages.
 
 ## Source and identity
 

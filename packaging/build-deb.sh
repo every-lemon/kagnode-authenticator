@@ -2,7 +2,7 @@
 # Prepared for the next step. The preview task does not execute this script.
 set -eu
 source_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-version=0.4.0
+version=0.4.1
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT HUP INT TERM
 root="$stage/authentactor"

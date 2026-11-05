@@ -1,3 +1,9 @@
+# 0.4.1
+
+- Refuse signup at the session limit before saving an account.
+- Reject malformed CSRF and encrypted-backup fields without server errors.
+- Existing account passwords, vault ciphertext, and backup format remain compatible.
+
 # Changes
 
 ## 0.4.0 — source preview

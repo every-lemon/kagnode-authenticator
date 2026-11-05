@@ -1,10 +1,10 @@
-# Verification — 0.4.0 source preview
+# Verification — 0.4.1 source preview
 
 Validation uses disposable vaults. No owner's database or credentials are part of this repository.
 
 ## Backend
 
-The 43 unittest cases include the original vault regressions and new route/proxy tests:
+The 46 unittest cases include the original vault regressions and new route/proxy tests:
 
 - 18 RFC 6238 reference vectors across SHA1/SHA256/SHA512.
 - Encryption at rest and restart persistence, item CRUD, input limits and generator constraints.
@@ -22,6 +22,8 @@ settings and password-rotation isolation, normalized unique emails, session/CSRF
 separation, generic sign-in errors, and migration with unchanged original salt
 and ciphertext. Migration refuses missing/conflicting owners, is repeatable, and
 retains an original-owner rollback copy without exposing it to other accounts.
+
+Additional hardening checks verify that a full session pool cannot create an account while returning an error, malformed CSRF is rejected, and malformed backup payload types leave saved ciphertext unchanged.
 
 ## Browser
 
@@ -42,6 +44,6 @@ Reports and screenshots are generated in ignored `test-artifacts/`. GitHub Actio
 
 ## Remaining qualification
 
-The 0.4.0 compatibility Debian package has not been built or installation-qualified. No binary stable release or production deployment is represented. Browser automation covers Chromium; physical Safari/iOS/Android and assistive-technology testing remain separate checks. Email accounts have separate vaults; shared-vault access, cloud sync and hosted KagNode account integration are not implemented.
+The 0.4.1 compatibility Debian package has not been built or installation-qualified. No binary stable release or production deployment is represented. Browser automation covers Chromium; physical Safari/iOS/Android and assistive-technology testing remain separate checks. Email accounts have separate vaults; shared-vault access, cloud sync and hosted KagNode account integration are not implemented.
 
 The original 0.1.0 preview's broader manual checks are historical; this file reports the current reproducible checks only.

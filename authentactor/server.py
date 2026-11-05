@@ -27,7 +27,7 @@ from flask import Flask, g, jsonify, make_response, redirect, request, send_from
 from werkzeug.exceptions import HTTPException
 from .storage import email_address, initialize_database
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 KDF = {"name": "scrypt", "n": 32768, "r": 8, "p": 1}
 COOKIE = "authentactor_session"
 PAGE_PATHS = ("/overview", "/authenticators", "/passwords", "/backup-codes", "/favorites", "/generator", "/security", "/settings")
@@ -380,7 +380,7 @@ def create_app(data_dir, preview=False, legacy_email=None):
             state = session_state()
             if not state:
                 raise VaultError('Your vault is locked. Sign in to continue.', 401)
-            if request.method not in ('GET', 'HEAD') and not secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), state['csrf']):
+            if request.method not in ('GET', 'HEAD') and not secrets.compare_digest(request.headers.get('X-CSRF-Token', '').encode(), state['csrf'].encode()):
                 raise VaultError('Please reload the page and try again.', 403)
             g.vault_session = state
             return fn(*args, **kwargs)
@@ -488,6 +488,9 @@ def create_app(data_dir, preview=False, legacy_email=None):
         if not isinstance(password, str) or not 12 <= len(password) <= 1024:
             raise VaultError('Use a password between 12 and 1024 characters.')
         with mutex:
+            cleanup_sessions()
+            if len(sessions) - int(request.cookies.get(COOKIE, '') in sessions) >= 256:
+                raise VaultError('Too many active sessions. Try again after another session locks.', 429)
             now = time.time()
             for bucket, limit in (('signup-global', 20), ('signup-ip:'+request.remote_addr, 5)):
                 q = failures[bucket]
@@ -722,6 +725,8 @@ def create_app(data_dir, preview=False, legacy_email=None):
             backup = body["backup"]
             password = body["password"]
             if not isinstance(password, str) or len(password) > 1024 or backup["format"] != "authentactor-encrypted-v1" or backup["kdf"] != KDF:
+                raise ValueError()
+            if not isinstance(backup.get("salt"), str) or not isinstance(backup.get("payload"), str):
                 raise ValueError()
             salt = base64.b64decode(backup["salt"], validate=True)
             if len(salt) != 16:
