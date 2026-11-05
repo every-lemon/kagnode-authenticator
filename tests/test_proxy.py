@@ -22,7 +22,7 @@ class ProxyTests(unittest.TestCase):
                         "X-Forwarded-Host": "vault.example.test", "Origin": "https://vault.example.test"}
 
     def test_trusted_tls_proxy_sets_secure_cookie_and_public_origin(self):
-        response = self.client.post("/api/setup", json={"password": "Disposable proxy test password!"},
+        response = self.client.post("/api/setup", json={"email":"owner@proxy.test","password": "Disposable proxy test password!"},
                                     headers=self.headers, environ_overrides={"REMOTE_ADDR": "127.0.0.1"})
         self.assertEqual(response.status_code, 200)
         cookie = response.headers["Set-Cookie"]
@@ -30,13 +30,13 @@ class ProxyTests(unittest.TestCase):
             self.assertIn(flag, cookie)
 
     def test_untrusted_forwarding_headers_do_not_change_origin(self):
-        response = self.client.post("/api/setup", json={"password": "Disposable proxy test password!"},
+        response = self.client.post("/api/setup", json={"email":"owner@proxy.test","password": "Disposable proxy test password!"},
                                     headers=self.headers, environ_overrides={"REMOTE_ADDR": "198.51.100.15"})
         self.assertEqual(response.status_code, 403)
         self.assertIsNone(response.headers.get("Set-Cookie"))
 
     def test_trusted_proxy_cannot_bypass_cross_origin_protection(self):
-        response = self.client.post("/api/setup", json={"password": "Disposable proxy test password!"},
+        response = self.client.post("/api/setup", json={"email":"owner@proxy.test","password": "Disposable proxy test password!"},
                                     headers={**self.headers, "Origin": "https://elsewhere.example"},
                                     environ_overrides={"REMOTE_ADDR": "127.0.0.1"})
         self.assertEqual(response.status_code, 403)

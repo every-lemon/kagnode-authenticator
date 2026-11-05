@@ -56,6 +56,8 @@ const state = {
   demo: false,
   csrf: null,
   initialized: false,
+  authMode: 'unlock',
+  account: null,
   preview: false,
   settings: {
     auto_lock: 15
@@ -164,35 +166,44 @@ function clearSensitive() {
   $('detail-content').replaceChildren();
   $('utility-content').replaceChildren();
   $('generated-password').textContent = '';
+  $('account-email').textContent = '';
+  $('vault-subtitle').textContent = '';
+  document.querySelector('.topbar .avatar').textContent = '?';
   $('item-form').reset();
   $('master-password').value = '';
   $('confirm-password').value = '';
   $('item-password').type = 'password';
 }
 
-function showAuth() {
+function showAuth(mode) {
+  const email = state.account?.email || $('auth-email').value;
   returnView = pathView(location.pathname) || returnView;
   closeDialogs();
   clearSensitive();
+  state.account = null;
+  state.authMode = mode || (['/setup', '/signup'].includes(location.pathname) || !state.initialized ? 'setup' : 'unlock');
+  const signup = state.authMode === 'setup';
   state.unlocked = false;
   state.demo = false;
   $('loading').hidden = true;
   $('dashboard').hidden = true;
   $('auth-screen').hidden = false;
-  $('auth-title').innerHTML = state.initialized ? 'Welcome back.<br>Unlock your vault.' : 'Your sign-ins,<br>in one place.';
-  $('auth-description').textContent = state.initialized ? 'Enter your master password to access your saved logins and verification codes.' : 'Keep your passwords and verification codes together in your own encrypted vault.';
-  $('auth-button').textContent = state.initialized ? 'Unlock my vault' : 'Create my vault';
-  $('confirm-wrap').hidden = state.initialized;
-  $('confirm-password').required = !state.initialized;
-  $('master-password').minLength = state.initialized ? 1 : 12;
-  $('master-password').autocomplete = state.initialized ? 'current-password' : 'new-password';
-  $('master-password').placeholder = state.initialized ? 'Enter your master password' : 'At least 12 characters';
+  $('auth-email').value = email;
+  $('auth-title').textContent = signup ? 'Create an account' : 'Sign in';
+  $('auth-description').textContent = signup ? 'Create a separate encrypted vault for this email.' : 'Enter your email and password to open your vault.';
+  $('auth-button').textContent = signup ? 'Create account' : 'Sign in';
+  $('auth-switch').textContent = signup ? 'Already have an account? Sign in' : 'Create an account';
+  $('confirm-wrap').hidden = !signup;
+  $('confirm-password').required = signup;
+  $('master-password').minLength = signup ? 12 : 1;
+  $('master-password').autocomplete = signup ? 'new-password' : 'current-password';
+  $('master-password').placeholder = signup ? 'At least 12 characters' : 'Your password';
   $('master-password').type = 'password';
-  $('master-note').textContent = state.initialized ? 'Your vault is encrypted. Only your master password can unlock it.' : 'Your master password encrypts your vault. Keep it somewhere safe — it cannot be recovered.';
+  $('master-note').textContent = signup ? 'This password encrypts your vault. Email cannot be used to reset it.' : 'Use the existing vault password. Your email identifies the account.';
   $('auth-preview').hidden = !state.preview;
   showError('auth-error', '');
-  document.title = `${state.initialized ? 'Unlock' : 'Create your vault'} · KagNode. Authenticator`;
-  history.replaceState(null, '', (state.initialized ? '/unlock' : '/setup') + '?next=' + encodeURIComponent(pagePaths[returnView]));
+  document.title = `${signup ? 'Create account' : 'Sign in'} · KagNode. Authenticator`;
+  history.replaceState(null, '', (signup ? '/setup' : '/unlock') + '?next=' + encodeURIComponent(pagePaths[returnView]));
   $('sidebar').classList.remove('open'); $('nav-scrim').hidden = true;
   $('mobile-menu').setAttribute('aria-expanded', 'false');
 }
@@ -206,10 +217,15 @@ async function showDashboard() {
   $('demo-pill').hidden = !state.demo;
   $('demo-banner').hidden = !state.demo;
   $('preview-banner').hidden = !state.preview;
-  $('lock-label').textContent = state.demo ? 'Exit demo' : 'Lock vault';
+  $('lock-label').textContent = state.demo ? 'Exit demo' : 'Sign out';
   $('sync-label').textContent = state.demo ? 'Sample vault' : 'Vault unlocked';
   $('demo-exit').innerHTML = (state.initialized ? 'Unlock your vault' : 'Set up your vault') + svg('arrow-right');
-  $('vault-subtitle').textContent = state.demo ? 'Sample workspace' : 'Your private workspace';
+  $('vault-subtitle').textContent = state.demo ? 'Sample vault' : state.account?.email || 'Your vault';
+  $('account-email').textContent = state.demo ? 'demo@example.com' : state.account?.email || '';
+  const avatar = document.querySelector('.topbar .avatar');
+  avatar.textContent = state.demo ? 'D' : (state.account?.email || '?').charAt(0).toUpperCase();
+  avatar.title = state.account?.email || 'Demo account';
+  avatar.setAttribute('aria-label', 'Account settings');
   navigate(returnView, {history: 'replace'});
   try { await refreshItems(); }
   catch (error) { if (state.unlocked) { $('vault-load-error').hidden = false; toast(error.message, true); } }
@@ -859,20 +875,21 @@ function bind() {
     if (state.authBusy) return;
     showError('auth-error', '');
     const password = $('master-password').value;
-    if (!state.initialized && password !== $('confirm-password').value) {
+    if (state.authMode === 'setup' && password !== $('confirm-password').value) {
       showError('auth-error', 'The passwords do not match.');
       return;
     }
     state.authBusy = true;
     const btn = document.querySelector('.auth-submit');
     btn.disabled = true;
-    loading(state.initialized ? 'Unlocking your vault…' : 'Creating your vault…');
+    loading(state.authMode === 'setup' ? 'Creating your account…' : 'Signing in…');
     try {
-      const data = await api(state.initialized ? '/unlock' : '/setup', 'POST', {
-        password
+      const data = await api(state.authMode === 'setup' ? '/setup' : '/unlock', 'POST', {
+        email: $('auth-email').value, password
       });
       state.csrf = data.csrf;
       state.settings = data.settings;
+      state.account = data.account;
       state.initialized = true;
       state.demo = false;
       $('master-password').value = '';
@@ -886,6 +903,7 @@ function bind() {
       $('loading').hidden = true;
     }
   });
+  $('auth-switch').addEventListener('click', () => showAuth(state.authMode === 'setup' ? 'unlock' : 'setup'));
   $('demo-button').addEventListener('click', startDemo);
   $('demo-exit').addEventListener('click', () => showAuth());
   $('lock-button').addEventListener('click', async () => {
@@ -894,7 +912,7 @@ function bind() {
       return;
     }
     try {
-      loading('Locking your vault…');
+      loading('Signing out…');
       await Promise.all([api('/lock', 'POST'), new Promise(resolve => setTimeout(resolve, 400))]);
       showAuth();
       toast('Vault locked');
@@ -1117,6 +1135,7 @@ async function boot() {
     const data = await api('/status');
     state.initialized = data.initialized;
     state.preview = data.preview;
+    state.account = data.account;
     state.csrf = data.csrf;
     state.settings = data.settings || {
       auto_lock: 15

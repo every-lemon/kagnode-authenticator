@@ -17,12 +17,15 @@ class VaultTests(unittest.TestCase):
         self.app = create_app(self.tmp.name)
         self.client = self.app.test_client()
         self.headers = {'X-Requested-With': 'Authentactor'}
+        self.email = 'owner@vault.test'
         self.password = 'Test-vault-master!123'
         result = self.send('/setup', {'password': self.password})
         self.assertEqual(result.status_code, 200)
         self.headers['X-CSRF-Token'] = result.json['csrf']
 
     def send(self, path, body=None, method='POST', client=None, headers=None):
+        if path in ('/setup', '/unlock'):
+            body = {**(body or {}), 'email': self.email}
         return (client or self.client).open('/api'+path, method=method, json=body or {}, headers=headers or self.headers)
 
     def add(self, **extra):

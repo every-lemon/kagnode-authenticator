@@ -4,3 +4,6 @@ AUTHENTACTOR_PORT=80
 AUTHENTACTOR_DATA=/var/lib/authentactor
 # For a local TLS reverse proxy, bind to 127.0.0.1 on an unused backend port.
 # AUTHENTACTOR_TRUSTED_PROXY=127.0.0.1
+
+# Required only when assigning an existing single-owner vault on first upgrade.
+# AUTHENTACTOR_LEGACY_EMAIL=owner@example.com

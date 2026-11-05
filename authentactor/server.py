@@ -1,4 +1,4 @@
-"""Encrypted single-owner vault. No master password or vault key is persisted."""
+"""Separate encrypted vaults for email-based accounts. No master password or vault key is persisted."""
 import base64
 import hashlib
 import hmac
@@ -25,8 +25,9 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from flask import Flask, g, jsonify, make_response, redirect, request, send_from_directory
 from werkzeug.exceptions import HTTPException
+from .storage import email_address, initialize_database
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 KDF = {"name": "scrypt", "n": 32768, "r": 8, "p": 1}
 COOKIE = "authentactor_session"
 PAGE_PATHS = ("/overview", "/authenticators", "/passwords", "/backup-codes", "/favorites", "/generator", "/security", "/settings")
@@ -291,7 +292,7 @@ def fetch_icon(url):
     raise VaultError("No supported icon found. A letter icon will be used instead.")
 
 
-def create_app(data_dir, preview=False):
+def create_app(data_dir, preview=False, legacy_email=None):
     app = Flask(__name__, static_folder="static")
     app.url_map.strict_slashes = False
     app.config.update(MAX_CONTENT_LENGTH=16_000_000, JSON_SORT_KEYS=False)
@@ -309,66 +310,97 @@ def create_app(data_dir, preview=False):
         db.execute("PRAGMA secure_delete=ON")
         return db
 
-    with connect() as db:
-        db.execute("CREATE TABLE IF NOT EXISTS vault (id INTEGER PRIMARY KEY CHECK(id=1), salt BLOB NOT NULL, payload BLOB NOT NULL)")
+    initialize_database(db_path, legacy_email)
     os.chmod(db_path, 0o600)
 
-    def row():
+    def any_accounts():
         with connect() as db:
-            return db.execute("SELECT salt,payload FROM vault WHERE id=1").fetchone()
+            return bool(db.execute('SELECT 1 FROM accounts LIMIT 1').fetchone())
 
-    def read_vault(key):
-        current = row()
+    def row(account_id):
+        with connect() as db:
+            return db.execute('SELECT salt,payload FROM accounts WHERE id=?', (account_id,)).fetchone()
+
+    def read_vault(key, account_id):
+        current = row(account_id)
         if not current:
-            raise VaultError("Create your vault first.", 409)
+            raise VaultError('Your account is unavailable.', 401)
         try:
             return json.loads(Fernet(key).decrypt(current[1]))
         except (InvalidToken, ValueError):
-            raise VaultError("Incorrect master password.", 401)
+            raise VaultError('Incorrect email or password.', 401)
 
-    def write_vault(vault, key, salt=None):
+    def write_vault(vault, key, account_id, salt=None):
         clear = json.dumps(vault, ensure_ascii=False).encode()
         if len(clear) > 8_000_000:
-            raise VaultError("This version supports an 8 MB vault. Remove unused icons or items to make room.")
+            raise VaultError('Each account supports an 8 MB vault. Remove unused icons or items to make room.')
         payload = Fernet(key).encrypt(clear)
+        state = getattr(g, 'vault_session', None)
         with connect() as db:
-            if salt is not None:
-                db.execute("INSERT OR REPLACE INTO vault VALUES (1,?,?)", (salt, payload))
-            else:
-                db.execute("UPDATE vault SET payload=? WHERE id=1", (payload,))
+            db.execute('BEGIN IMMEDIATE')
+            current = db.execute('SELECT salt,secret_version FROM accounts WHERE id=?', (account_id,)).fetchone()
+            if not current or not state or state['account_id'] != account_id or state['secret_version'] != current[1]:
+                raise VaultError('Your vault is locked. Sign in again.', 401)
+            new_salt = current[0] if salt is None else salt
+            db.execute('UPDATE accounts SET salt=?,payload=?,secret_version=secret_version+? WHERE id=?', (new_salt, payload, int(salt is not None), account_id))
+            # Preserve the original table, and mirror only its mapped owner's
+            # legitimate changes so an emergency legacy rollback retains them.
+            if db.execute('SELECT 1 FROM legacy_vault_owners WHERE account_id=?', (account_id,)).fetchone():
+                db.execute('UPDATE vault SET salt=?,payload=? WHERE id=1', (new_salt, payload))
 
     def cleanup_sessions():
         now = time.time()
         for token, state in list(sessions.items()):
             if now - state["active"] >= state["timeout"] * 60 or now - state["created"] > 8 * 3600:
                 sessions.pop(token, None)
+                icon_limits.pop(token, None)
+        for bucket, attempts in list(failures.items()):
+            window = 900 if bucket.startswith('signup-') else 300
+            while attempts and attempts[0] < now - window:
+                attempts.popleft()
+            if not attempts:
+                failures.pop(bucket, None)
 
     def session_state():
         with mutex:
             cleanup_sessions()
-            return sessions.get(request.cookies.get(COOKIE, ""))
+            token = request.cookies.get(COOKIE, '')
+            state = sessions.get(token)
+            if state:
+                with connect() as db:
+                    current = db.execute('SELECT secret_version FROM accounts WHERE id=?', (state['account_id'],)).fetchone()
+                if not current or current[0] != state['secret_version']:
+                    sessions.pop(token, None)
+                    return None
+            return state
 
     def authenticated(fn):
         @wraps(fn)
         def inner(*args, **kwargs):
             state = session_state()
             if not state:
-                raise VaultError("Your vault is locked. Unlock it to continue.", 401)
-            if request.method not in ("GET", "HEAD") and not secrets.compare_digest(request.headers.get("X-CSRF-Token", ""), state["csrf"]):
-                raise VaultError("Please reload the page and try again.", 403)
+                raise VaultError('Your vault is locked. Sign in to continue.', 401)
+            if request.method not in ('GET', 'HEAD') and not secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), state['csrf']):
+                raise VaultError('Please reload the page and try again.', 403)
             g.vault_session = state
             return fn(*args, **kwargs)
         return inner
 
-    def new_session(key, vault):
+    def new_session(key, vault, account_id):
         cleanup_sessions()
-        if len(sessions) >= 32:
-            sessions.pop(min(sessions, key=lambda t: sessions[t]["active"]))
-        token = secrets.token_urlsafe(32)
-        csrf = secrets.token_urlsafe(32)
-        sessions[token] = {"key": key, "csrf": csrf, "active": time.time(), "created": time.time(), "timeout": vault["settings"]["auto_lock"]}
-        response = jsonify(ok=True, csrf=csrf, settings=vault["settings"])
-        response.set_cookie(COOKIE, token, httponly=True, secure=request.is_secure, samesite="Strict", path="/")
+        with connect() as db:
+            email, version = db.execute('SELECT email,secret_version FROM accounts WHERE id=?', (account_id,)).fetchone()
+        sessions.pop(request.cookies.get(COOKIE, ''), None)
+        own = [(token, state) for token, state in sessions.items() if state['account_id'] == account_id]
+        if len(own) >= 16:
+            sessions.pop(min(own, key=lambda pair: pair[1]['active'])[0], None)
+        if len(sessions) >= 256:
+            raise VaultError('Too many active sessions. Try again after another session locks.', 429)
+        token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+        sessions[token] = {'key': key, 'account_id': account_id, 'email': email, 'secret_version': version,
+                           'csrf': csrf, 'active': time.time(), 'created': time.time(), 'timeout': vault['settings']['auto_lock']}
+        response = jsonify(ok=True, csrf=csrf, settings=vault['settings'], account={'email': email})
+        response.set_cookie(COOKIE, token, httponly=True, secure=request.is_secure, samesite='Strict', path='/')
         return response
 
     @app.before_request
@@ -408,17 +440,18 @@ def create_app(data_dir, preview=False):
     def index():
         if request.args.get("demo") == "1":
             return redirect("/overview?demo=1")
-        return redirect("/overview" if session_state() else "/unlock" if row() else "/setup")
+        return redirect("/overview" if session_state() else "/unlock" if any_accounts() else "/setup")
 
     @app.get("/unlock")
     @app.get("/setup")
+    @app.get("/signup")
     def sign_in_page():
         target = request.args.get("next", "/overview")
         if target not in PAGE_PATHS:
             target = "/overview"
         if session_state():
             return redirect(target)
-        expected = "/unlock" if row() else "/setup"
+        expected = "/setup" if request.path in ("/setup", "/signup") or not any_accounts() else "/unlock"
         if request.path.rstrip("/") != expected:
             return redirect(expected + "?" + urlencode({"next": target}))
         return send_from_directory(app.static_folder, "index.html")
@@ -431,7 +464,7 @@ def create_app(data_dir, preview=False):
         # Demo routing serves only the empty shell. API authorization is always
         # enforced separately; adding ?demo=1 never unlocks a real vault.
         if request.args.get("demo") != "1" and not session_state():
-            destination = "/unlock" if row() else "/setup"
+            destination = "/unlock" if any_accounts() else "/setup"
             return redirect(destination + "?" + urlencode({"next": request.path.rstrip("/")}))
         return send_from_directory(app.static_folder, "index.html")
 
@@ -441,52 +474,73 @@ def create_app(data_dir, preview=False):
     @app.get("/api/status")
     def status():
         state = session_state()
-        return jsonify(initialized=bool(row()), unlocked=bool(state), csrf=state["csrf"] if state else None,
-                       settings={"auto_lock": state["timeout"]} if state else None, preview=preview, version=VERSION)
+        return jsonify(initialized=any_accounts(), unlocked=bool(state), csrf=state["csrf"] if state else None,
+                       settings={"auto_lock": state["timeout"]} if state else None, account={"email": state["email"]} if state else None, registration=True, preview=preview, version=VERSION)
 
-    @app.post("/api/setup")
+    @app.post('/api/setup')
     def setup():
         body = json_body()
-        password = body.get("password", "")
+        try:
+            email = email_address(body.get('email'))
+        except ValueError as error:
+            raise VaultError(str(error))
+        password = body.get('password', '')
         if not isinstance(password, str) or not 12 <= len(password) <= 1024:
-            raise VaultError("Use a master password between 12 and 1024 characters.")
-        with mutex:
-            if row():
-                raise VaultError("This vault is already set up. Unlock it instead.", 409)
-            salt = secrets.token_bytes(16)
-            key = derive_key(password, salt)
-            vault = {"items": [], "settings": {"auto_lock": 15}, "created_at": int(time.time())}
-            write_vault(vault, key, salt)
-            return new_session(key, vault)
-
-    @app.post("/api/unlock")
-    def unlock():
-        body = json_body()
-        password = body.get("password", "")
-        if not isinstance(password, str) or len(password) > 1024:
-            raise VaultError("Invalid master password.", 401)
+            raise VaultError('Use a password between 12 and 1024 characters.')
         with mutex:
             now = time.time()
-            for bucket, limit in (("global", 50), (request.remote_addr, 10)):
+            for bucket, limit in (('signup-global', 20), ('signup-ip:'+request.remote_addr, 5)):
+                q = failures[bucket]
+                while q and q[0] < now - 900:
+                    q.popleft()
+                if len(q) >= limit:
+                    raise VaultError('Too many account requests. Try again later.', 429)
+                q.append(now)
+            salt = secrets.token_bytes(16)
+            key = derive_key(password, salt)
+            vault = {'items': [], 'settings': {'auto_lock': 15}, 'created_at': int(now)}
+            payload = Fernet(key).encrypt(json.dumps(vault).encode())
+            identifier = str(uuid.uuid4())
+            try:
+                with connect() as db:
+                    db.execute('INSERT INTO accounts(id,email,salt,payload,created) VALUES(?,?,?,?,?)', (identifier, email, salt, payload, int(now)))
+            except sqlite3.IntegrityError:
+                raise VaultError('Unable to create this account. Try signing in, or use another email.', 409)
+            return new_session(key, vault, identifier)
+
+    @app.post('/api/unlock')
+    def unlock():
+        body = json_body()
+        password = body.get('password', '')
+        try:
+            email = email_address(body.get('email'))
+        except ValueError:
+            email = ''
+        if not isinstance(password, str) or len(password) > 1024:
+            raise VaultError('Incorrect email or password.', 401)
+        with mutex:
+            now = time.time()
+            email_bucket = 'email:'+hashlib.sha256(email.encode()).hexdigest()
+            for bucket, limit in (('global', 50), ('ip:'+request.remote_addr, 10), (email_bucket, 10)):
                 q = failures[bucket]
                 while q and q[0] < now - 300:
                     q.popleft()
                 if len(q) >= limit:
-                    raise VaultError("Too many unlock attempts. Try again in five minutes.", 429)
-            current = row()
-            if not current:
-                raise VaultError("Create your vault first.", 409)
-            key = derive_key(password, current[0])
+                    raise VaultError('Too many sign-in attempts. Try again in five minutes.', 429)
+            with connect() as db:
+                account = db.execute('SELECT id,salt FROM accounts WHERE email=?', (email,)).fetchone()
+            # Unknown emails still pay the same password-derivation cost.
+            key = derive_key(password, account[1] if account else b'unknown-account!')
             try:
-                vault = read_vault(key)
+                if not account:
+                    raise VaultError('Incorrect email or password.', 401)
+                vault = read_vault(key, account[0])
             except VaultError:
-                failures["global"].append(now)
-                failures[request.remote_addr].append(now)
+                for bucket in ('global', 'ip:'+request.remote_addr, email_bucket):
+                    failures[bucket].append(now)
                 raise
-            failures.pop(request.remote_addr, None)
-            old = request.cookies.get(COOKIE, "")
-            sessions.pop(old, None)
-            return new_session(key, vault)
+            failures.pop(email_bucket, None)
+            return new_session(key, vault, account[0])
 
     @app.post("/api/lock")
     @authenticated
@@ -519,7 +573,7 @@ def create_app(data_dir, preview=False):
     @authenticated
     def list_items():
         with mutex:
-            vault = read_vault(g.vault_session["key"])
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
             counts = Counter(i["password"] for i in vault["items"] if i["password"])
             now = time.time()
             return jsonify(items=[summary(i, counts, now) for i in vault["items"]], settings=vault["settings"], server_time=now)
@@ -528,7 +582,7 @@ def create_app(data_dir, preview=False):
     @authenticated
     def codes():
         with mutex:
-            vault = read_vault(g.vault_session["key"])
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
             now = time.time()
             return jsonify(server_time=now, codes=[{"id": i["id"], "code": totp_code(i, now), "expires_at": (int(now // i["period"]) + 1) * i["period"]} for i in vault["items"] if i["secret"]])
 
@@ -536,7 +590,7 @@ def create_app(data_dir, preview=False):
     @authenticated
     def item_detail(item_id):
         with mutex:
-            vault = read_vault(g.vault_session["key"])
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
             item = next((i for i in vault["items"] if i["id"] == item_id), None)
             if not item:
                 raise VaultError("Item not found.", 404)
@@ -547,12 +601,12 @@ def create_app(data_dir, preview=False):
     def add_item():
         body = json_body()
         with mutex:
-            vault = read_vault(g.vault_session["key"])
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
             if len(vault["items"]) >= 1000:
                 raise VaultError("This version supports up to 1,000 items.")
             item = clean_item(body)
             vault["items"].append(item)
-            write_vault(vault, g.vault_session["key"])
+            write_vault(vault, g.vault_session["key"], g.vault_session["account_id"])
         return jsonify(ok=True, id=item["id"]), 201
 
     @app.route("/api/items/<item_id>", methods=["PUT", "DELETE"])
@@ -560,7 +614,7 @@ def create_app(data_dir, preview=False):
     def update_item(item_id):
         body = json_body()
         with mutex:
-            vault = read_vault(g.vault_session["key"])
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
             index = next((j for j, i in enumerate(vault["items"]) if i["id"] == item_id), None)
             if index is None:
                 raise VaultError("Item not found.", 404)
@@ -570,7 +624,7 @@ def create_app(data_dir, preview=False):
                 vault["items"][index]["favorite"] = bool(body["favorite"])
             else:
                 vault["items"][index] = clean_item(body, vault["items"][index])
-            write_vault(vault, g.vault_session["key"])
+            write_vault(vault, g.vault_session["key"], g.vault_session["account_id"])
         return jsonify(ok=True)
 
     @app.post("/api/items/<item_id>/backup-codes/<code_id>/usage")
@@ -580,7 +634,7 @@ def create_app(data_dir, preview=False):
         if set(body) != {"used"} or type(body["used"]) is not bool:
             raise VaultError("Choose whether this backup code has been used.")
         with mutex:
-            vault = read_vault(g.vault_session["key"])
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
             item = next((i for i in vault["items"] if i["id"] == item_id), None)
             code = next((c for c in item.get("backup_codes", []) if c["id"] == code_id), None) if item else None
             if code is None:
@@ -589,7 +643,7 @@ def create_app(data_dir, preview=False):
                 code["used"] = body["used"]
                 code["used_at"] = int(time.time()) if code["used"] else None
                 item["updated_at"] = int(time.time())
-                write_vault(vault, g.vault_session["key"])
+                write_vault(vault, g.vault_session["key"], g.vault_session["account_id"])
             return jsonify(ok=True, used=code["used"], used_at=code["used_at"],
                            remaining=sum(not c["used"] for c in item["backup_codes"]))
 
@@ -642,18 +696,19 @@ def create_app(data_dir, preview=False):
         if minutes not in (5, 15, 30, 60):
             raise VaultError("Choose 5, 15, 30, or 60 minutes.")
         with mutex:
-            vault = read_vault(g.vault_session["key"])
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
             vault["settings"]["auto_lock"] = minutes
-            write_vault(vault, g.vault_session["key"])
+            write_vault(vault, g.vault_session["key"], g.vault_session["account_id"])
             for state in sessions.values():
-                state["timeout"] = minutes
+                if state["account_id"] == g.vault_session["account_id"]:
+                    state["timeout"] = minutes
         return jsonify(ok=True)
 
     @app.get("/api/backup")
     @authenticated
     def backup():
         with mutex:
-            salt, payload = row()
+            salt, payload = row(g.vault_session["account_id"])
         response = jsonify(format="authentactor-encrypted-v1", version=1, kdf=KDF,
                            salt=base64.b64encode(salt).decode(), payload=payload.decode())
         response.headers["Content-Disposition"] = 'attachment; filename="kagnode-authenticator-encrypted-backup.json"'
@@ -682,7 +737,7 @@ def create_app(data_dir, preview=False):
         except (KeyError, TypeError, ValueError, InvalidToken):
             raise VaultError("Unable to read backup. Check its master password and file format.")
         with mutex:
-            vault = read_vault(g.vault_session["key"])
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
             ids = {i["id"] for i in vault["items"]}
             added = []
             for item in items:
@@ -692,7 +747,7 @@ def create_app(data_dir, preview=False):
             if len(vault["items"]) + len(added) > 1000:
                 raise VaultError("The restored vault would exceed 1,000 items.")
             vault["items"].extend(added)
-            write_vault(vault, g.vault_session["key"])
+            write_vault(vault, g.vault_session["key"], g.vault_session["account_id"])
         return jsonify(ok=True, imported=len(added), skipped=len(items)-len(added))
 
     @app.post("/api/change-password")
@@ -703,16 +758,19 @@ def create_app(data_dir, preview=False):
         if not isinstance(old, str) or not isinstance(new, str) or not 12 <= len(new) <= 1024 or len(old) > 1024:
             raise VaultError("Use a new master password of at least 12 characters.")
         with mutex:
-            salt, _ = row()
+            salt, _ = row(g.vault_session["account_id"])
             old_key = derive_key(old, salt)
             if not secrets.compare_digest(old_key, g.vault_session["key"]):
                 raise VaultError("Current master password is incorrect.", 400)
-            vault = read_vault(old_key)
+            vault = read_vault(old_key, g.vault_session["account_id"])
             salt = secrets.token_bytes(16)
             key = derive_key(new, salt)
-            write_vault(vault, key, salt)
-            sessions.clear()
-            return new_session(key, vault)
+            account_id = g.vault_session['account_id']
+            write_vault(vault, key, account_id, salt)
+            for token, state in list(sessions.items()):
+                if state['account_id'] == account_id:
+                    sessions.pop(token, None)
+            return new_session(key, vault, account_id)
 
     app.extensions["vault_testing"] = {"sessions": sessions, "read": read_vault, "db_path": db_path}
     return app

@@ -1,5 +1,12 @@
 # Changes
 
+## 0.4.0 — source preview
+
+- Added email signup/sign-in with separate encrypted vaults, settings and sessions.
+- Added an explicit-owner migration that retains the database, original ciphertext and password.
+- Scoped item actions, codes, backups, restore, password changes and automatic locking to each account.
+- Added account switching, clearer sign-in text and multi-account/migration tests.
+
 ## 0.3.0 — source preview
 
 - Added encrypted backup codes, standalone or attached to existing items, and a dedicated `/backup-codes` route.

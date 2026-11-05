@@ -14,6 +14,7 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "test-artifacts"
 VIEWS = ("overview", "authenticators", "passwords", "backup-codes", "favorites", "generator", "security", "settings")
+EMAIL = "owner@browser.test"
 PASSWORD = "Only-for-disposable-browser-tests!2048"
 
 
@@ -53,6 +54,7 @@ def check(browser, base):
     page.locator("#auth-screen").wait_for(state="visible")
     assert "/setup?next=%2Fpasswords" in page.url
     page.screenshot(path=str(ARTIFACTS / "dark-1440-setup.png"), full_page=True)
+    page.locator("#auth-email").fill(EMAIL)
     page.locator("#master-password").fill(PASSWORD)
     page.locator("#confirm-password").fill(PASSWORD)
     page.locator(".auth-submit").click()
@@ -161,6 +163,7 @@ def check(browser, base):
     assert page.locator("#items .item-card").count() == 0
     assert page.locator("#item-backup-codes").input_value() == ""
     assert page.locator("#detail-content").inner_text() == ""
+    page.locator("#auth-email").fill(EMAIL)
     page.locator("#master-password").fill(changed)
     page.locator(".auth-submit").click()
     page.wait_for_url("**/settings")
@@ -228,13 +231,69 @@ def check(browser, base):
     page.unroute("**/api/status")
     page.locator("#loading-retry").click()
     page.locator(".item-title").filter(has_text="KagNode QA account").wait_for()
+    # A second email gets a separate vault; changing its settings/password
+    # must not alter or sign out the first account.
+    second = browser.new_context(viewport={"width":390,"height":844})
+    other = second.new_page()
+    other.on("pageerror", lambda error: errors.append(str(error)))
+    other.goto(base+"/unlock")
+    other.locator("#auth-screen").wait_for(state="visible")
+    other.locator("#auth-switch").click()
+    other.locator("#auth-email").fill("second@browser.test")
+    other_password = "Only another disposable account password!72"
+    other.locator("#master-password").fill(other_password)
+    other.locator("#confirm-password").fill(other_password)
+    other.locator(".auth-submit").click()
+    other.locator("#dashboard").wait_for(state="visible")
+    assert other.locator(".item-card").count() == 0
+    other.locator("#add-button").click()
+    other.locator("#item-name").fill("Second account only")
+    other.locator("#item-password").fill("Second account item secret!2048")
+    other.locator("#save-item").click()
+    other.locator("#item-dialog").wait_for(state="hidden")
+    other.locator(".item-title").filter(has_text="Second account only").wait_for()
+    page.set_viewport_size({"width":1440,"height":1000})
+    page.goto(base+"/overview")
+    page.locator(".item-title").filter(has_text="KagNode QA account").wait_for()
+    assert page.locator(".item-title").filter(has_text="Second account only").count() == 0
+    identifier=page.locator(".item-card").first.get_attribute("data-id")
+    assert other.request.get(base+"/api/items/"+identifier).status == 404
+    other.locator("#mobile-menu").click()
+    other.locator('nav a[data-view="settings"]').click()
+    assert other.locator("#account-email").inner_text() == "second@browser.test"
+    other.get_by_role("combobox",name="Automatic lock timeout",exact=True).click()
+    other.get_by_role("option",name="30 minutes",exact=True).click()
+    other.get_by_text("Automatic lock updated",exact=True).wait_for()
+    assert page.request.get(base+"/api/status").json()["settings"]["auto_lock"] == 5
+    other.locator("#change-master").click()
+    other.locator("#current-master").fill(other_password)
+    other.locator("#new-master").fill(other_password+"-changed")
+    other.locator("#new-master-confirm").fill(other_password+"-changed")
+    other.get_by_role("button",name="Update password",exact=True).click()
+    other.get_by_text("Master password updated. Other sessions are now locked.",exact=True).wait_for()
+    assert page.request.get(base+"/api/items").status == 200
+    page.locator("#lock-button").click()
+    page.locator("#auth-screen").wait_for(state="visible")
+    assert page.locator("#items .item-card").count() == 0
+    for theme in ("dark","light"):
+        page.evaluate("theme=>document.documentElement.dataset.theme=theme",theme)
+        for width in (1440,390,320):
+            page.set_viewport_size({"width":width,"height":900})
+            assert page.evaluate("document.documentElement.scrollWidth") <= width+1
+            page.screenshot(path=str(ARTIFACTS/f"account-signin-{theme}-{width}.png"),full_page=True)
+    page.locator("#auth-email").fill("second@browser.test")
+    page.locator("#master-password").fill(other_password+"-changed")
+    page.locator(".auth-submit").click()
+    page.locator(".item-title").filter(has_text="Second account only").wait_for()
+    assert page.locator(".item-title").filter(has_text="KagNode QA account").count() == 0
+    second.close()
     context.close()
     assert not errors, errors
     result = {"layouts": layouts, "page_errors": errors, "workflows": [
         "direct routes and reload", "setup and unlock return paths", "Back/Forward", "8-digit TOTP entry",
         "keyboard choice controls", "backup/merge restore", "master password rotation", "lock clears DOM",
         "saved lock preference", "mobile menu and Escape", "centered loader and top strip", "vault skeleton",
-        "failed item load/retry", "failed initial load/retry", "small-screen form", "backup code paste/reveal/copy", "explicit use and undo", "usage preserved by edits", "backup-code-only items", "backup code mobile layouts and depleted groups"]}
+        "failed item load/retry", "failed initial load/retry", "small-screen form", "backup code paste/reveal/copy", "explicit use and undo", "usage preserved by edits", "backup-code-only items", "backup code mobile layouts and depleted groups", "second email signup", "cross-account item isolation", "independent account settings", "account password rotation isolation", "sign out and account switching", "email sign-in responsive layouts"]}
     (ARTIFACTS / "report.json").write_text(json.dumps(result, indent=2) + "\n")
     print(f"PASS: {len(layouts)} layouts and {len(result['workflows'])} workflows; no browser exceptions")
 

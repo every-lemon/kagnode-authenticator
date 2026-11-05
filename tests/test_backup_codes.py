@@ -15,12 +15,15 @@ class BackupCodeTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.app = create_app(directory.name)
         self.client = self.app.test_client()
+        self.email = 'owner@backup.test'
         self.password = 'Disposable-backup-code-tests!2030'
         self.headers = {'X-Requested-With': 'Authentactor'}
-        response = self.client.post('/api/setup', json={'password': self.password}, headers=self.headers)
+        response = self.client.post('/api/setup', json={'email':self.email,'password': self.password}, headers=self.headers)
         self.headers['X-CSRF-Token'] = response.json['csrf']
 
     def send(self, path, body, method='POST', headers=None):
+        if path in ('/setup', '/unlock'):
+            body = {**body, 'email': self.email}
         return self.client.open('/api'+path, method=method, json=body, headers=self.headers if headers is None else headers)
 
     def add(self, codes='FIRST-1234-ABCD\nSECOND 5678 EFGH', **extra):
@@ -136,7 +139,7 @@ class BackupCodeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         directory = self.app.extensions['vault_testing']['db_path'].parent
         restarted = create_app(directory).test_client()
-        response = restarted.post('/api/unlock', json={'password': new_password}, headers={'X-Requested-With': 'Authentactor'})
+        response = restarted.post('/api/unlock', json={'email':self.email,'password': new_password}, headers={'X-Requested-With': 'Authentactor'})
         self.assertEqual(response.status_code, 200)
         codes = restarted.get('/api/items/'+identifier).json['item']['backup_codes']
         self.assertEqual(codes[0]['id'], code)
@@ -147,10 +150,10 @@ class BackupCodeTests(unittest.TestCase):
         token = next(iter(self.app.extensions['vault_testing']['sessions'].values()))['key']
         path = self.app.extensions['vault_testing']['db_path']
         with sqlite3.connect(path) as db:
-            payload = db.execute('SELECT payload FROM vault').fetchone()[0]
+            payload = db.execute('SELECT payload FROM accounts').fetchone()[0]
             vault = json.loads(Fernet(token).decrypt(payload))
             vault['items'][0].pop('backup_codes')
-            db.execute('UPDATE vault SET payload=?', (Fernet(token).encrypt(json.dumps(vault).encode()),))
+            db.execute('UPDATE accounts SET payload=?', (Fernet(token).encrypt(json.dumps(vault).encode()),))
         summary = self.client.get('/api/items').json['items'][0]
         self.assertEqual(summary['backup_codes_total'], 0)
         self.assertEqual(self.send('/items/'+identifier, {'name': 'Legacy edit', 'password': 'Original password'}, 'PUT').status_code, 200)

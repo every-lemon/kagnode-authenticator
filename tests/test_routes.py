@@ -13,7 +13,7 @@ class PageRouteTests(unittest.TestCase):
         self.headers = {'X-Requested-With': 'Authentactor'}
 
     def setup_vault(self):
-        response = self.client.post('/api/setup', json={'password': 'Private-test-password-938!'}, headers=self.headers)
+        response = self.client.post('/api/setup', json={'email':'owner@routes.test','password': 'Private-test-password-938!'}, headers=self.headers)
         self.assertEqual(response.status_code, 200)
         self.headers['X-CSRF-Token'] = response.json['csrf']
 
@@ -39,7 +39,10 @@ class PageRouteTests(unittest.TestCase):
         self.setup_vault()
         self.client.post('/api/lock', json={}, headers=self.headers)
         self.assertEqual(self.client.get('/settings').location, '/unlock?next=%2Fsettings')
-        self.assertEqual(self.client.get('/setup?next=https://attacker.example').location, '/unlock?next=%2Foverview')
+        response = self.client.get('/setup?next=https://attacker.example')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('Location', response.headers)
+        response.close()
         self.assertEqual(self.client.get('/api/items').status_code, 401)
 
     def test_demo_does_not_authorize_real_vault_apis(self):
