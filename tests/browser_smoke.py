@@ -1,4 +1,5 @@
 """Browser regression checks against an isolated, disposable vault only."""
+
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,16 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "test-artifacts"
-VIEWS = ("overview", "authenticators", "passwords", "backup-codes", "favorites", "generator", "security", "settings")
+VIEWS = (
+    "overview",
+    "authenticators",
+    "passwords",
+    "backup-codes",
+    "favorites",
+    "generator",
+    "security",
+    "settings",
+)
 EMAIL = "owner@browser.test"
 PASSWORD = "Only-for-disposable-browser-tests!2048"
 
@@ -22,7 +32,9 @@ def check(browser, base):
     errors, layouts = [], []
     for theme in ("dark", "light"):
         for width, height in ((1440, 1000), (820, 1100), (390, 844), (320, 740)):
-            context = browser.new_context(viewport={"width": width, "height": height}, reduced_motion="reduce")
+            context = browser.new_context(
+                viewport={"width": width, "height": height}, reduced_motion="reduce"
+            )
             context.add_init_script(f"localStorage.setItem('kagnode-theme', '{theme}')")
             page = context.new_page()
             page.on("pageerror", lambda error: errors.append(str(error)))
@@ -30,24 +42,48 @@ def check(browser, base):
                 page.goto(f"{base}/{view}?demo=1")
                 page.locator("#dashboard").wait_for(state="visible")
                 page.wait_for_function('document.getElementById("loading").hidden')
-                assert page.evaluate("document.documentElement.scrollWidth") <= width + 1, (theme, width, view)
-                assert page.locator(".nav-item.active").get_attribute("data-view") == view
+                assert (
+                    page.evaluate("document.documentElement.scrollWidth") <= width + 1
+                ), (theme, width, view)
+                assert (
+                    page.locator(".nav-item.active").get_attribute("data-view") == view
+                )
                 assert page.locator("html").get_attribute("data-theme") == theme
-                layouts.append({"theme": theme, "width": width, "view": view, "overflow": False})
-                if (width, view) in ((1440, "overview"), (390, "authenticators"), (390, "settings")):
-                    page.screenshot(path=str(ARTIFACTS / f"{theme}-{width}-{view}.png"), full_page=True)
+                layouts.append(
+                    {"theme": theme, "width": width, "view": view, "overflow": False}
+                )
+                if (width, view) in (
+                    (1440, "overview"),
+                    (390, "authenticators"),
+                    (390, "settings"),
+                ):
+                    page.screenshot(
+                        path=str(ARTIFACTS / f"{theme}-{width}-{view}.png"),
+                        full_page=True,
+                    )
             if width == 390:
                 page.locator("#mobile-menu").click()
-                assert page.locator("#mobile-menu").get_attribute("aria-expanded") == "true"
+                assert (
+                    page.locator("#mobile-menu").get_attribute("aria-expanded")
+                    == "true"
+                )
                 page.keyboard.press("Escape")
-                assert page.locator("#mobile-menu").get_attribute("aria-expanded") == "false"
+                assert (
+                    page.locator("#mobile-menu").get_attribute("aria-expanded")
+                    == "false"
+                )
                 page.locator("#mobile-menu").click()
                 page.locator('nav a[data-view="authenticators"]').click()
                 assert "/authenticators?demo=1" in page.url
-                assert page.locator("#mobile-menu").get_attribute("aria-expanded") == "false"
+                assert (
+                    page.locator("#mobile-menu").get_attribute("aria-expanded")
+                    == "false"
+                )
             context.close()
 
-    context = browser.new_context(viewport={"width": 1440, "height": 1000}, reduced_motion="reduce")
+    context = browser.new_context(
+        viewport={"width": 1440, "height": 1000}, reduced_motion="reduce"
+    )
     page = context.new_page()
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(base + "/passwords")
@@ -78,24 +114,41 @@ def check(browser, base):
     assert "QA-RECOVERY-1234" not in page.locator("#detail-content").inner_text()
     page.get_by_role("button", name="Show backup code 1", exact=True).click()
     assert page.locator(".backup-code-value").first.inner_text() == "QA-RECOVERY-1234"
-    page.evaluate("Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText:async text=>window.__lastCopied=text,readText:async()=>window.__lastCopied}})")
+    page.evaluate(
+        "Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText:async text=>window.__lastCopied=text,readText:async()=>window.__lastCopied}})"
+    )
     page.get_by_role("button", name="Copy backup code 1", exact=True).click()
     page.wait_for_function('window.__lastCopied === "QA-RECOVERY-1234"')
-    assert page.locator(".backup-details-heading span").inner_text() == "2 of 2 available"
+    assert (
+        page.locator(".backup-details-heading span").inner_text() == "2 of 2 available"
+    )
     page.get_by_role("button", name="Mark used backup code 1", exact=True).click()
-    page.locator(".backup-details-heading span").filter(has_text="1 of 2 available").wait_for()
-    assert page.get_by_role("button", name="Copy backup code 1", exact=True).is_disabled()
+    page.locator(".backup-details-heading span").filter(
+        has_text="1 of 2 available"
+    ).wait_for()
+    assert page.get_by_role(
+        "button", name="Copy backup code 1", exact=True
+    ).is_disabled()
     page.get_by_role("button", name="Mark available backup code 1", exact=True).click()
-    page.locator(".backup-details-heading span").filter(has_text="2 of 2 available").wait_for()
+    page.locator(".backup-details-heading span").filter(
+        has_text="2 of 2 available"
+    ).wait_for()
     page.get_by_role("button", name="Mark used backup code 1", exact=True).click()
-    page.locator(".backup-details-heading span").filter(has_text="1 of 2 available").wait_for()
+    page.locator(".backup-details-heading span").filter(
+        has_text="1 of 2 available"
+    ).wait_for()
     page.locator("#detail-edit").click()
     page.locator("#item-dialog").wait_for(state="visible")
-    assert page.locator("#item-backup-codes").input_value() == "QA-RECOVERY-1234\nQA-RECOVERY-5678"
+    assert (
+        page.locator("#item-backup-codes").input_value()
+        == "QA-RECOVERY-1234\nQA-RECOVERY-5678"
+    )
     page.locator("#item-notes").fill("An unrelated edit keeps code usage")
     page.locator("#save-item").click()
     page.locator("#item-dialog").wait_for(state="hidden")
-    page.locator(".backup-summary").filter(has_text="1 of 2 backup codes available").wait_for()
+    page.locator(".backup-summary").filter(
+        has_text="1 of 2 backup codes available"
+    ).wait_for()
     page.locator('nav a[data-view="settings"]').click()
     page.wait_for_url("**/settings")
     page.go_back()
@@ -128,7 +181,9 @@ def check(browser, base):
     page.locator("#add-button").click()
     assert page.locator("#type-backup").get_attribute("aria-pressed") == "true"
     page.locator("#item-name").fill("Recovery-only example")
-    page.locator("#item-backup-codes").fill("LONG-"+"1234567890"*8+"\nSECOND-RECOVERY-4321")
+    page.locator("#item-backup-codes").fill(
+        "LONG-" + "1234567890" * 8 + "\nSECOND-RECOVERY-4321"
+    )
     page.locator("#save-item").click()
     page.locator("#item-dialog").wait_for(state="hidden")
     card = page.locator(".item-card").filter(has_text="Recovery-only example")
@@ -138,17 +193,27 @@ def check(browser, base):
     for theme in ("dark", "light"):
         page.evaluate("theme=>document.documentElement.dataset.theme=theme", theme)
         for width in (1440, 390, 320):
-            page.set_viewport_size({"width":width,"height":900 if width==1440 else 844})
-            assert page.evaluate("document.documentElement.scrollWidth") <= width+1
-            assert page.locator("#detail-dialog").evaluate("d=>d.scrollWidth<=d.clientWidth+1")
-            page.screenshot(path=str(ARTIFACTS/f"backup-codes-{theme}-{width}.png"))
-    page.set_viewport_size({"width":1440,"height":1000})
-    for number in (1,2):
-        page.get_by_role("button", name=f"Mark used backup code {number}", exact=True).click()
-        page.locator(".backup-details-heading span").filter(has_text=f"{2-number} of 2 available").wait_for()
+            page.set_viewport_size(
+                {"width": width, "height": 900 if width == 1440 else 844}
+            )
+            assert page.evaluate("document.documentElement.scrollWidth") <= width + 1
+            assert page.locator("#detail-dialog").evaluate(
+                "d=>d.scrollWidth<=d.clientWidth+1"
+            )
+            page.screenshot(path=str(ARTIFACTS / f"backup-codes-{theme}-{width}.png"))
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    for number in (1, 2):
+        page.get_by_role(
+            "button", name=f"Mark used backup code {number}", exact=True
+        ).click()
+        page.locator(".backup-details-heading span").filter(
+            has_text=f"{2 - number} of 2 available"
+        ).wait_for()
     page.locator("#detail-content .close-dialog").click()
     page.reload()
-    page.locator(".item-card").filter(has_text="Recovery-only example").locator(".backup-summary").filter(has_text="0 of 2").wait_for()
+    page.locator(".item-card").filter(has_text="Recovery-only example").locator(
+        ".backup-summary"
+    ).filter(has_text="0 of 2").wait_for()
     page.locator('nav a[data-view="settings"]').click()
 
     page.locator("#change-master").click()
@@ -157,7 +222,9 @@ def check(browser, base):
     page.locator("#new-master").fill(changed)
     page.locator("#new-master-confirm").fill(changed)
     page.get_by_role("button", name="Update password", exact=True).click()
-    page.get_by_text("Master password updated. Other sessions are now locked.", exact=True).wait_for()
+    page.get_by_text(
+        "Master password updated. Other sessions are now locked.", exact=True
+    ).wait_for()
     page.locator("#lock-button").click()
     page.wait_for_url("**/unlock?next=%2Fsettings")
     assert page.locator("#items .item-card").count() == 0
@@ -187,25 +254,32 @@ def check(browser, base):
       };
     """)
     page.goto(base + "/authenticators?test-hold=status")
-    page.wait_for_function('window.__heldResponses.length === 1')
+    page.wait_for_function("window.__heldResponses.length === 1")
     rect = page.locator("#loading").bounding_box()
     assert rect == {"x": 0, "y": 0, "width": 1440, "height": 1000}, rect
     logo = page.locator(".loading-logo").bounding_box()
     assert abs(logo["x"] + logo["width"] / 2 - 720) < 1
     assert page.locator(".loading-strip").bounding_box()["y"] == 0
     page.screenshot(path=str(ARTIFACTS / "centered-loader.png"))
-    page.evaluate('window.__heldResponses.splice(0).forEach(release => release())')
+    page.evaluate("window.__heldResponses.splice(0).forEach(release => release())")
     page.locator(".item-title").filter(has_text="KagNode QA account").wait_for()
 
     page.goto(base + "/authenticators?test-hold=items")
-    page.wait_for_function('window.__heldResponses.length === 1')
+    page.wait_for_function("window.__heldResponses.length === 1")
     page.locator(".skeleton-card").first.wait_for()
     assert page.locator("#items").get_attribute("aria-busy") == "true"
     page.screenshot(path=str(ARTIFACTS / "vault-skeleton.png"))
-    page.evaluate('window.__heldResponses.splice(0).forEach(release => release())')
+    page.evaluate("window.__heldResponses.splice(0).forEach(release => release())")
     page.locator(".item-title").filter(has_text="KagNode QA account").wait_for()
 
-    page.route("**/api/items", lambda route: route.fulfill(status=503, content_type="application/json", body='{"error":"Simulated unavailable response"}'))
+    page.route(
+        "**/api/items",
+        lambda route: route.fulfill(
+            status=503,
+            content_type="application/json",
+            body='{"error":"Simulated unavailable response"}',
+        ),
+    )
     page.reload()
     page.locator("#vault-load-error").wait_for(state="visible")
     assert page.locator(".skeleton-card").count() == 0
@@ -223,7 +297,14 @@ def check(browser, base):
     assert page.locator("#item-dialog").is_visible()
     page.locator("#item-dialog .close-dialog").first.click()
 
-    page.route("**/api/status", lambda route: route.fulfill(status=503, content_type="application/json", body='{"error":"Simulated unavailable response"}'))
+    page.route(
+        "**/api/status",
+        lambda route: route.fulfill(
+            status=503,
+            content_type="application/json",
+            body='{"error":"Simulated unavailable response"}',
+        ),
+    )
     page.reload()
     page.locator("#loading-retry").wait_for(state="visible")
     assert page.locator(".loading-logo").is_visible()
@@ -233,10 +314,10 @@ def check(browser, base):
     page.locator(".item-title").filter(has_text="KagNode QA account").wait_for()
     # A second email gets a separate vault; changing its settings/password
     # must not alter or sign out the first account.
-    second = browser.new_context(viewport={"width":390,"height":844})
+    second = browser.new_context(viewport={"width": 390, "height": 844})
     other = second.new_page()
     other.on("pageerror", lambda error: errors.append(str(error)))
-    other.goto(base+"/unlock")
+    other.goto(base + "/unlock")
     other.locator("#auth-screen").wait_for(state="visible")
     other.locator("#auth-switch").click()
     other.locator("#auth-email").fill("second@browser.test")
@@ -252,50 +333,88 @@ def check(browser, base):
     other.locator("#save-item").click()
     other.locator("#item-dialog").wait_for(state="hidden")
     other.locator(".item-title").filter(has_text="Second account only").wait_for()
-    page.set_viewport_size({"width":1440,"height":1000})
-    page.goto(base+"/overview")
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(base + "/overview")
     page.locator(".item-title").filter(has_text="KagNode QA account").wait_for()
-    assert page.locator(".item-title").filter(has_text="Second account only").count() == 0
-    identifier=page.locator(".item-card").first.get_attribute("data-id")
-    assert other.request.get(base+"/api/items/"+identifier).status == 404
+    assert (
+        page.locator(".item-title").filter(has_text="Second account only").count() == 0
+    )
+    identifier = page.locator(".item-card").first.get_attribute("data-id")
+    assert other.request.get(base + "/api/items/" + identifier).status == 404
     other.locator("#mobile-menu").click()
     other.locator('nav a[data-view="settings"]').click()
     assert other.locator("#account-email").inner_text() == "second@browser.test"
-    other.get_by_role("combobox",name="Automatic lock timeout",exact=True).click()
-    other.get_by_role("option",name="30 minutes",exact=True).click()
-    other.get_by_text("Automatic lock updated",exact=True).wait_for()
-    assert page.request.get(base+"/api/status").json()["settings"]["auto_lock"] == 5
+    other.get_by_role("combobox", name="Automatic lock timeout", exact=True).click()
+    other.get_by_role("option", name="30 minutes", exact=True).click()
+    other.get_by_text("Automatic lock updated", exact=True).wait_for()
+    assert page.request.get(base + "/api/status").json()["settings"]["auto_lock"] == 5
     other.locator("#change-master").click()
     other.locator("#current-master").fill(other_password)
-    other.locator("#new-master").fill(other_password+"-changed")
-    other.locator("#new-master-confirm").fill(other_password+"-changed")
-    other.get_by_role("button",name="Update password",exact=True).click()
-    other.get_by_text("Master password updated. Other sessions are now locked.",exact=True).wait_for()
-    assert page.request.get(base+"/api/items").status == 200
+    other.locator("#new-master").fill(other_password + "-changed")
+    other.locator("#new-master-confirm").fill(other_password + "-changed")
+    other.get_by_role("button", name="Update password", exact=True).click()
+    other.get_by_text(
+        "Master password updated. Other sessions are now locked.", exact=True
+    ).wait_for()
+    assert page.request.get(base + "/api/items").status == 200
     page.locator("#lock-button").click()
     page.locator("#auth-screen").wait_for(state="visible")
     assert page.locator("#items .item-card").count() == 0
-    for theme in ("dark","light"):
-        page.evaluate("theme=>document.documentElement.dataset.theme=theme",theme)
-        for width in (1440,390,320):
-            page.set_viewport_size({"width":width,"height":900})
-            assert page.evaluate("document.documentElement.scrollWidth") <= width+1
-            page.screenshot(path=str(ARTIFACTS/f"account-signin-{theme}-{width}.png"),full_page=True)
+    for theme in ("dark", "light"):
+        page.evaluate("theme=>document.documentElement.dataset.theme=theme", theme)
+        for width in (1440, 390, 320):
+            page.set_viewport_size({"width": width, "height": 900})
+            assert page.evaluate("document.documentElement.scrollWidth") <= width + 1
+            page.screenshot(
+                path=str(ARTIFACTS / f"account-signin-{theme}-{width}.png"),
+                full_page=True,
+            )
     page.locator("#auth-email").fill("second@browser.test")
-    page.locator("#master-password").fill(other_password+"-changed")
+    page.locator("#master-password").fill(other_password + "-changed")
     page.locator(".auth-submit").click()
     page.locator(".item-title").filter(has_text="Second account only").wait_for()
-    assert page.locator(".item-title").filter(has_text="KagNode QA account").count() == 0
+    assert (
+        page.locator(".item-title").filter(has_text="KagNode QA account").count() == 0
+    )
     second.close()
     context.close()
     assert not errors, errors
-    result = {"layouts": layouts, "page_errors": errors, "workflows": [
-        "direct routes and reload", "setup and unlock return paths", "Back/Forward", "8-digit TOTP entry",
-        "keyboard choice controls", "backup/merge restore", "master password rotation", "lock clears DOM",
-        "saved lock preference", "mobile menu and Escape", "centered loader and top strip", "vault skeleton",
-        "failed item load/retry", "failed initial load/retry", "small-screen form", "backup code paste/reveal/copy", "explicit use and undo", "usage preserved by edits", "backup-code-only items", "backup code mobile layouts and depleted groups", "second email signup", "cross-account item isolation", "independent account settings", "account password rotation isolation", "sign out and account switching", "email sign-in responsive layouts"]}
+    result = {
+        "layouts": layouts,
+        "page_errors": errors,
+        "workflows": [
+            "direct routes and reload",
+            "setup and unlock return paths",
+            "Back/Forward",
+            "8-digit TOTP entry",
+            "keyboard choice controls",
+            "backup/merge restore",
+            "master password rotation",
+            "lock clears DOM",
+            "saved lock preference",
+            "mobile menu and Escape",
+            "centered loader and top strip",
+            "vault skeleton",
+            "failed item load/retry",
+            "failed initial load/retry",
+            "small-screen form",
+            "backup code paste/reveal/copy",
+            "explicit use and undo",
+            "usage preserved by edits",
+            "backup-code-only items",
+            "backup code mobile layouts and depleted groups",
+            "second email signup",
+            "cross-account item isolation",
+            "independent account settings",
+            "account password rotation isolation",
+            "sign out and account switching",
+            "email sign-in responsive layouts",
+        ],
+    }
     (ARTIFACTS / "report.json").write_text(json.dumps(result, indent=2) + "\n")
-    print(f"PASS: {len(layouts)} layouts and {len(result['workflows'])} workflows; no browser exceptions")
+    print(
+        f"PASS: {len(layouts)} layouts and {len(result['workflows'])} workflows; no browser exceptions"
+    )
 
 
 def main():
@@ -307,13 +426,30 @@ def main():
     with tempfile.TemporaryDirectory(prefix="kagnode-authenticator-test-") as data:
         env = {k: v for k, v in os.environ.items() if not k.startswith("AUTHENTACTOR_")}
         with (ARTIFACTS / "server.log").open("w") as log:
-            server = subprocess.Popen([os.environ.get("AUTH_APP_PYTHON", sys.executable), "-m", "authentactor",
-                                       "--host", "127.0.0.1", "--port", str(port), "--data-dir", data, "--preview"],
-                                      cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
+            server = subprocess.Popen(
+                [
+                    os.environ.get("AUTH_APP_PYTHON", sys.executable),
+                    "-m",
+                    "authentactor",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(port),
+                    "--data-dir",
+                    data,
+                    "--preview",
+                ],
+                cwd=ROOT,
+                env=env,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
             try:
                 for _ in range(100):
                     if server.poll() is not None:
-                        raise RuntimeError("Disposable server exited; inspect test-artifacts/server.log")
+                        raise RuntimeError(
+                            "Disposable server exited; inspect test-artifacts/server.log"
+                        )
                     try:
                         with urlopen(base + "/api/status", timeout=1) as response:
                             assert not json.load(response)["initialized"]
@@ -323,9 +459,12 @@ def main():
                 else:
                     raise RuntimeError("Disposable server did not start")
                 with sync_playwright() as playwright:
-                    browser = playwright.chromium.launch(headless=True,
-                        executable_path=os.environ.get("KAGNODE_BROWSER_EXECUTABLE") or None,
-                        args=["--no-sandbox", "--disable-dev-shm-usage"])
+                    browser = playwright.chromium.launch(
+                        headless=True,
+                        executable_path=os.environ.get("KAGNODE_BROWSER_EXECUTABLE")
+                        or None,
+                        args=["--no-sandbox", "--disable-dev-shm-usage"],
+                    )
                     try:
                         check(browser, base)
                     finally:

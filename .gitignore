@@ -18,3 +18,10 @@ node_modules/
 playwright-report/
 test-results/
 *.log
+
+# Repository release tooling
+dist/
+.build/
+.ruff_cache/
+__pycache__/
+*.pyc
