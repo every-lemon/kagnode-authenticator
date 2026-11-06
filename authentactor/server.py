@@ -27,7 +27,7 @@ from flask import Flask, g, jsonify, make_response, redirect, request, send_from
 from werkzeug.exceptions import HTTPException
 from .storage import email_address, initialize_database
 
-VERSION = "0.4.1"
+VERSION = "0.5.0"
 KDF = {"name": "scrypt", "n": 32768, "r": 8, "p": 1}
 COOKIE = "authentactor_session"
 PAGE_PATHS = ("/overview", "/authenticators", "/passwords", "/backup-codes", "/favorites", "/generator", "/security", "/settings")
@@ -294,6 +294,8 @@ def fetch_icon(url):
 
 def create_app(data_dir, preview=False, legacy_email=None):
     app = Flask(__name__, static_folder="static")
+    from .web_assets import register_assets
+    register_assets(app)
     app.url_map.strict_slashes = False
     app.config.update(MAX_CONTENT_LENGTH=16_000_000, JSON_SORT_KEYS=False)
     directory = Path(data_dir)

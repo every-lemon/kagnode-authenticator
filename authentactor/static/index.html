@@ -6,8 +6,9 @@
   <title>KagNode. Authenticator</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"><script src="/static/theme.js"></script><link rel="stylesheet" href="/static/style.css">
   <script src="/static/controls.js" defer></script><script src="/static/app.js" defer></script>
+<link rel="stylesheet" href="/static/kagnode-ui.css">
 </head>
-<body>
+<body class="kn-ui" data-product="authenticator">
 <div id="loading" class="loading" role="status" aria-live="polite"><div class="loading-strip"></div><img class="loading-logo" src="/static/logo.svg" alt="KagNode."><span id="loading-label">Opening your vault…</span><div class="loading-dots" aria-hidden="true"><i></i><i></i><i></i></div><button id="loading-retry" type="button" class="button secondary" hidden>Try again</button></div>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <section id="auth-screen" class="auth-screen" hidden>
@@ -25,7 +26,7 @@
       <button id="auth-switch" type="button" class="text-button auth-switch">Create an account</button><div class="auth-divider"><span>DEMO</span></div><button id="demo-button" class="button secondary wide"><span data-icon="layout"></span>Explore the demo vault</button>
       <p id="auth-preview" class="preview-note" hidden><span data-icon="info"></span>HTTP test preview · use test credentials only.</p>
     </div>
-    <footer class="auth-footer"><span data-icon="server"></span>Stored on your server<span>Preview 0.4.1</span></footer>
+    <footer class="auth-footer"><span data-icon="server"></span>Stored on your server<span>Preview 0.5.0</span></footer>
   </div>
   <aside class="auth-art" aria-label="About KagNode Authenticator">
     <span class="eyebrow">KAGNODE AUTHENTICATOR</span><h2>Passwords and codes.</h2><p>Store passwords, authenticator keys, and backup codes. Each account has its own encrypted vault and password.</p>
@@ -41,7 +42,7 @@
     <a class="brand sidebar-brand" href="/overview" data-view="overview"><img class="brand-mark" src="/static/logo.svg" alt=""><span class="brand-copy"><strong>KagNode<span class="brand-period">.</span></strong><small>Authenticator</small></span></a><a class="website-link" href="https://nebulacoder.com" target="_blank" rel="noopener noreferrer"><span data-icon="home"></span>KagNode Website<span data-icon="arrow-up-right"></span></a><div id="vault-subtitle" class="vault-subtitle">Your private workspace</div>
     <button id="quick-search" class="quick-search"><span data-icon="search"></span><span>Quick search…</span><kbd>Ctrl K</kbd></button><p class="nav-label">YOUR VAULT</p><nav aria-label="Main navigation"><a class="nav-item active" data-view="overview" href="/overview"><span data-icon="layout"></span>Overview</a><a class="nav-item" data-view="authenticators" href="/authenticators"><span data-icon="fingerprint"></span>Authenticators<span class="nav-count" id="nav-totp-count">0</span></a><a class="nav-item" data-view="passwords" href="/passwords"><span data-icon="key"></span>Passwords<span class="nav-count" id="nav-password-count">0</span></a><a class="nav-item" data-view="backup-codes" href="/backup-codes"><span data-icon="layers"></span>Backup codes<span class="nav-count" id="nav-backup-count">0</span></a><a class="nav-item" data-view="favorites" href="/favorites"><span data-icon="star"></span>Favorites</a></nav>
     <p class="nav-label tools-label">TOOLS</p><nav aria-label="Vault tools"><a class="nav-item" data-view="generator" href="/generator"><span data-icon="sparkles"></span>Password generator</a><a class="nav-item" data-view="security" href="/security"><span data-icon="shield-check"></span>Security check<span id="security-dot" class="attention-dot" hidden></span></a></nav><p class="nav-label manage-label">MANAGE</p><nav aria-label="Manage vault"><a class="nav-item" data-view="settings" href="/settings"><span data-icon="settings"></span>Settings & backups</a></nav>
-    <div class="sidebar-bottom"><span data-icon="lock"></span><div><strong>Encrypted vault</strong><small>KagNode. Authenticator · 0.2.0</small></div></div>
+    <div class="sidebar-bottom"><span data-icon="lock"></span><div><strong>Encrypted vault</strong><small>KagNode. Authenticator · 0.5.0</small></div></div>
   </aside>
   <main id="main-content" class="main" tabindex="-1">
     <span id="breadcrumb-current" class="sr-only">Overview</span>

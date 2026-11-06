@@ -4,7 +4,7 @@ Validation uses disposable vaults. No owner's database or credentials are part o
 
 ## Backend
 
-The 46 unittest cases include the original vault regressions and new route/proxy tests:
+The 48 unittest cases include the original vault regressions and new route/proxy tests:
 
 - 18 RFC 6238 reference vectors across SHA1/SHA256/SHA512.
 - Encryption at rest and restart persistence, item CRUD, input limits and generator constraints.

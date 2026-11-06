@@ -1,0 +1,27 @@
+{
+  "app.js": {
+    "file": "app.769b8d97daa87682.js",
+    "sha256": "769b8d97daa876829ac79ff5d3467aa561933259a0d557298a57ab9df477a450",
+    "bytes": 46825
+  },
+  "controls.js": {
+    "file": "controls.5b7abb1b0612a5bf.js",
+    "sha256": "5b7abb1b0612a5bffc96756f6ffe8aa4defc97b55763fa149afb58a1df9525d0",
+    "bytes": 2955
+  },
+  "kagnode-ui.css": {
+    "file": "kagnode-ui.b81d36ad26aa8364.css",
+    "sha256": "b81d36ad26aa8364da1a985c7c53bb21cea93dcf75ed33d4c5d4c1ea134cf74a",
+    "bytes": 5236
+  },
+  "style.css": {
+    "file": "style.2cf5fe4d8a516d74.css",
+    "sha256": "2cf5fe4d8a516d74ea01ffe32c7ba725d0455d12693fef06842ea384829c52ba",
+    "bytes": 41142
+  },
+  "theme.js": {
+    "file": "theme.0d742032fdee54f9.js",
+    "sha256": "0d742032fdee54f9de24c1bbb9dccca3ac1f3dba7fa2c58327a57e1414a328d2",
+    "bytes": 796
+  }
+}

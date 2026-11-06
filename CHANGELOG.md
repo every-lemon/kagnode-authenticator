@@ -1,3 +1,9 @@
+# 0.5.0
+
+- Shared KagNode product styling, mobile controls, and persistent product branding.
+- Prebuilt, fingerprinted UI assets with minified aliases and no source maps.
+- Existing account data, credentials, and API behavior are retained.
+
 # 0.4.1
 
 - Refuse signup at the session limit before saving an account.

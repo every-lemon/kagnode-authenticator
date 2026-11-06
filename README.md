@@ -145,3 +145,16 @@ The compatibility Debian recipe in `packaging/` remains available for developmen
 ## Source and identity
 
 Application source is **AGPL-3.0-only**; see [LICENSE](LICENSE) and [NOTICE](NOTICE). KagNode artwork is covered separately by [ARTWORK-LICENSE](ARTWORK-LICENSE). The artwork terms do not restrict the rights granted by the software license or require a fork to retain KagNode branding.
+
+
+UI assets
+---------
+The interface uses the shared KagNode black/white/blue design. Browser assets are minified and content-fingerprinted at build time; source maps are not published. Readable source and required license notices stay in this repository. Branding and hashes discourage casual reuse; they do not prevent inspection or copying.
+
+To rebuild, install esbuild 0.28.2 as a development tool, then run:
+
+```sh
+ESBUILD=/path/to/esbuild python3 scripts/build-web.py --package authentactor --product Authenticator
+```
+
+Generated assets and their private package manifest ship with the application. Node.js is not required on the server.
