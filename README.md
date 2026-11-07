@@ -10,7 +10,7 @@ Independent email-based accounts with encrypted authenticator vaults and backup 
 
 ## Release status
 
-Product source: **0.6.0-beta.1**. Packaging preview: **0.6.0-beta.1.packaging.1**.
+Product source: **0.6.0-beta.1**. Packaging preview: **0.6.0-beta.1.packaging.2**.
 
 Packaging prereleases do not change the latest stable release or establish new hardware or service compatibility. See [verification](docs/VERIFICATION.md) and [changelog](CHANGELOG.md).
 
@@ -32,13 +32,15 @@ Python 3.12 for the validated development environment; HTTPS for remote use. See
 
 ## Installation and downloads
 
-Download from [GitHub Releases](https://github.com/every-lemon/kagnode-authenticator/releases). Verify `SHA256SUMS` before extracting or installing a package.
+Download from [GitHub Releases](https://github.com/every-lemon/kagnode-passwords/releases). Verify `SHA256SUMS` before extracting or installing a package.
 
 | Payload | Formats | Support |
 | --- | --- | --- |
 | Complete source / artwork | `.tar.xz`, `.tar.gz`, `.zip` | Named top-level directory; manual setup |
 | Source preview | `.deb` | Source only; does not provision a service |
 | Source preview | `.rpm` | Rocky Linux 10 packaging preview; native services unverified |
+
+The GitHub repository is now `every-lemon/kagnode-passwords`. Existing native and source-package identities remain compatible.
 
 The existing `authentactor` Debian package builder remains in packaging/build-deb.sh.
 

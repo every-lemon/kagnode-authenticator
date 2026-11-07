@@ -249,7 +249,7 @@ def build(out, native_cli=True):
     files = source_files()
     prefix = f"{cfg['repository']}_{version}_source"
     archives(files, prefix, out, epoch)
-    package = (
+    package = cfg.get("source_package") or (
         cfg["repository"] if cfg["kind"] == "artwork" else cfg["repository"] + "-source"
     )
     system_packages(files, package, version, out, epoch)

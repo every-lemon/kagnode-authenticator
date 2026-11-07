@@ -71,6 +71,6 @@ jobs:
 
           Verify downloads with SHA256SUMS. release-manifest.json records the source commit, payload sizes and hashes.
 
-          [Installation and requirements](https://github.com/every-lemon/kagnode-authenticator#installation-and-downloads) · [Verification limits](https://github.com/every-lemon/kagnode-authenticator/blob/main/docs/VERIFICATION.md)
+          [Installation and requirements](https://github.com/every-lemon/kagnode-passwords#installation-and-downloads) · [Verification limits](https://github.com/every-lemon/kagnode-passwords/blob/main/docs/VERIFICATION.md)
           RELEASE_NOTES
           gh release create "$GITHUB_REF_NAME" packages/* --verify-tag --prerelease --latest=false --title "KagNode Authenticator $product_version · Packaging preview $packaging_revision" --notes-file "$release_notes"
