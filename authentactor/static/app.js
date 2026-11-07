@@ -104,6 +104,18 @@ const titles = {
     "Backup codes",
     "Recovery codes for when your usual sign-in method is unavailable.",
   ],
+  notes: [
+    "Secure notes",
+    "Private notes, encrypted with the rest of your vault.",
+  ],
+  trash: [
+    "Trash",
+    "Restore a removed item or delete it permanently. Nothing is removed automatically.",
+  ],
+  clients: [
+    "Apps & extensions",
+    "Connect Bitwarden clients to your compatible Passwords server.",
+  ],
   favorites: ["Favorites", "The accounts you reach for most."],
   generator: [
     "Password generator",
@@ -149,6 +161,8 @@ function toast(message, error = false) {
   e.innerHTML =
     svg(error ? "alert" : "check-circle") + `<span>${esc(message)}</span>`;
   $("toasts").append(e);
+  while ($("toasts").children.length > 2)
+    $("toasts").firstElementChild.remove();
   setTimeout(() => e.remove(), error ? 6500 : 3800);
 }
 async function api(path, method = "GET", data) {
@@ -269,7 +283,7 @@ function showAuth(mode) {
     : "Use the existing vault password. Your email identifies the account.";
   $("auth-preview").hidden = !state.preview;
   showError("auth-error", "");
-  document.title = `${signup ? "Create account" : "Sign in"} · KagNode. Authenticator`;
+  document.title = `${signup ? "Create account" : "Sign in"} · KagNode. Passwords`;
   history.replaceState(
     null,
     "",
@@ -355,6 +369,7 @@ async function refreshItems() {
       "passwords",
       "backup-codes",
       "favorites",
+      "notes",
     ].includes(state.view)
   )
     renderItems();
@@ -426,7 +441,7 @@ function navigate(view, options = {}) {
   $("breadcrumb-current").textContent =
     view === "overview" ? "Overview" : title;
   $("topbar-current").textContent = view === "overview" ? "Overview" : title;
-  document.title = `${title} · KagNode. Authenticator`;
+  document.title = `${title} · KagNode. Passwords`;
   document.querySelectorAll(".nav-item").forEach((e) => {
     const active = e.dataset.view === view;
     e.classList.toggle("active", active);
@@ -443,8 +458,12 @@ function navigate(view, options = {}) {
     "passwords",
     "backup-codes",
     "favorites",
+    "notes",
   ].includes(view);
   $("vault-view").hidden = !vault;
+  $("passwords-tools").hidden = !["trash", "clients"].includes(view);
+  if (["trash", "clients"].includes(view))
+    renderPasswordTools().catch((e) => toast(e.message, true));
   $("generator-view").hidden = view !== "generator";
   $("security-view").hidden = view !== "security";
   $("settings-view").hidden = view !== "settings";
@@ -505,6 +524,11 @@ function renderItems() {
     .filter((i) => state.view !== "favorites" || i.favorite)
     .filter(
       (i) =>
+        state.view !== "notes" ||
+        (!i.has_password && !i.has_totp && !i.has_backup_codes),
+    )
+    .filter(
+      (i) =>
         state.filter === "all" ||
         (state.filter === "totp"
           ? i.has_totp
@@ -514,7 +538,7 @@ function renderItems() {
     );
   const search = $("search").value.trim().toLowerCase();
   items = items.filter((i) =>
-    [i.name, i.username, i.url].some((v) =>
+    [i.name, i.username, i.url, i.folder].some((v) =>
       String(v).toLowerCase().includes(search),
     ),
   );
@@ -527,7 +551,7 @@ function renderItems() {
   $("items").innerHTML = items
     .map(
       (i) =>
-        `<article class="item-card" data-id="${esc(i.id)}"><div class="item-card-heading">${logo(i)}<button class="item-title" data-action="detail"><strong>${esc(i.name)}</strong><small>${esc(i.username || domain(i.url) || "Personal account")}</small></button><button class="icon-button ${i.favorite ? "favorite-active" : ""}" data-action="favorite" aria-label="${i.favorite ? "Remove from" : "Add to"} favorites" aria-pressed="${i.favorite}">${svg("star")}</button></div>${itemCredentials(i)}<div class="item-card-footer">${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${svg("globe")}${esc(domain(i.url))}</a>` : "<span>App account</span>"}<button class="text-button" data-action="detail">View details ${svg("arrow-right")}</button></div></article>`,
+        `<article class="item-card" data-id="${esc(i.id)}"><div class="item-card-heading">${logo(i)}<button class="item-title" data-action="detail"><strong>${esc(i.name)}</strong><small>${esc(i.username || domain(i.url) || "Personal account")}</small></button><button class="icon-button ${i.favorite ? "favorite-active" : ""}" data-action="favorite" aria-label="${i.favorite ? "Remove from" : "Add to"} favorites" aria-pressed="${i.favorite}">${svg("star")}</button></div>${itemCredentials(i)}<div class="item-card-footer">${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${svg("globe")}${esc(domain(i.url))}</a>` : `<span>${esc(i.folder || "Personal vault")}</span>`}<button class="text-button" data-action="detail">View details ${svg("arrow-right")}</button></div></article>`,
     )
     .join("");
   $("empty").hidden = items.length > 0;
@@ -565,6 +589,8 @@ function itemCredentials(i) {
     content = `<div class="code-area password-area"><button class="code-text" data-action="copy-password" aria-label="Copy ${esc(i.name)} password">••••••••••••</button><button class="icon-button" data-action="copy-password" aria-label="Copy password">${svg("copy")}</button></div><div class="item-type-line">${svg("key")}Password<span class="pill ${esc(i.strength)}">${esc(i.strength?.charAt(0).toUpperCase() + i.strength?.slice(1))}</span></div>`;
   if (i.has_backup_codes)
     content += `<button class="backup-summary" data-action="detail">${svg("shield-check")}<span>${i.backup_codes_remaining} of ${i.backup_codes_total} backup codes available</span>${svg("arrow-right")}</button>`;
+  if (!i.has_totp && !i.has_password && !i.has_backup_codes)
+    content = `<div class="item-type-line">${svg("shield-check")}Secure note</div>`;
   return content;
 }
 
@@ -687,7 +713,7 @@ async function itemAction(action, id) {
 
 function setItemType(type) {
   state.itemType = type;
-  for (const t of ["password", "totp", "both", "backup"]) {
+  for (const t of ["password", "totp", "both", "backup", "note"]) {
     $("type-" + t).classList.toggle("selected", type === t);
     $("type-" + t).setAttribute("aria-pressed", String(type === t));
   }
@@ -697,6 +723,7 @@ function setItemType(type) {
   $("item-secret").required = ["totp", "both"].includes(type);
   $("item-backup-codes").required = type === "backup";
   $("backup-optional").hidden = type === "backup";
+  $("item-notes").required = type === "note";
 }
 async function openItem(id = null, prefill = "") {
   if (state.demo) {
@@ -720,7 +747,9 @@ async function openItem(id = null, prefill = "") {
       ? "totp"
       : state.view === "backup-codes"
         ? "backup"
-        : "password",
+        : state.view === "notes"
+          ? "note"
+          : "password",
   );
   if (id) {
     try {
@@ -732,11 +761,12 @@ async function openItem(id = null, prefill = "") {
         "password",
         "secret",
         "notes",
+        "folder",
         "algorithm",
         "digits",
         "period",
       ])
-        $("item-" + field).value = i[field];
+        $("item-" + field).value = i[field] ?? "";
       $("item-favorite").checked = i.favorite;
       state.itemIcon = i.icon;
       $("item-backup-codes").value = (i.backup_codes || [])
@@ -749,7 +779,9 @@ async function openItem(id = null, prefill = "") {
             ? "totp"
             : i.password
               ? "password"
-              : "backup",
+              : i.has_backup_codes || i.backup_codes?.length
+                ? "backup"
+                : "note",
       );
       renderIconPreview();
     } catch (e) {
@@ -824,6 +856,7 @@ async function saveItem(event) {
       "password",
       "secret",
       "notes",
+      "folder",
       "algorithm",
       "digits",
       "period",
@@ -957,13 +990,13 @@ function deleteItem() {
   const i = detailItem;
   closeDialogs();
   utility(
-    "Delete this item?",
-    `<p>Remove <strong>${esc(i.name)}</strong> from your vault? This cannot be undone. Export a backup first if you may need it later.</p>`,
-    "Delete item",
+    "Move this item to Trash?",
+    `<p>Remove <strong>${esc(i.name)}</strong> from your vault? You can restore it from Trash. It stays encrypted until you explicitly delete it permanently.</p>`,
+    "Move to Trash",
     async () => {
       await api("/items/" + i.id, "DELETE");
       await refreshItems();
-      toast("Item removed from your vault");
+      toast("Item moved to Trash");
     },
     true,
   );
@@ -1156,7 +1189,7 @@ function demoDetails(id) {
         ]
       : [],
     notes:
-      "Sample item for exploring KagNode Authenticator. This is not a real account.",
+      "Sample item for exploring KagNode Passwords. This is not a real account.",
   };
 }
 
@@ -1345,7 +1378,7 @@ function bind() {
     if (button)
       itemAction(button.dataset.action, button.closest("[data-id]").dataset.id);
   });
-  for (const type of ["password", "totp", "both", "backup"])
+  for (const type of ["password", "totp", "both", "backup", "note"])
     $("type-" + type).addEventListener("click", () => setItemType(type));
   $("item-form").addEventListener("submit", saveItem);
   $("item-name").addEventListener("input", renderIconPreview);
@@ -1548,7 +1581,7 @@ function openQuickSearch() {
     const q = $("global-search").value.toLowerCase().trim();
     const found = state.items
       .filter((i) =>
-        [i.name, i.username, i.url].some((t) =>
+        [i.name, i.username, i.url, i.folder].some((t) =>
           String(t).toLowerCase().includes(q),
         ),
       )
@@ -1662,3 +1695,82 @@ async function boot() {
   setInterval(heartbeat, 1000);
 }
 boot();
+
+async function renderPasswordTools() {
+  const view = state.view;
+  const panel = $("passwords-tools");
+  panel.textContent = "Loading…";
+  if (view === "trash") {
+    const { items } = state.demo ? { items: [] } : await api("/trash");
+    if (state.view !== view) return;
+    panel.innerHTML = `<div class="panel settings-panel"><h2>Recently removed</h2><p>Items stay here until you restore them or permanently delete them.</p><div class="trash-items">${items.length ? items.map((i) => `<article class="setting-row"><div><strong>${esc(i.name)}</strong><p>${esc(i.folder || "No folder")} · Removed ${esc(new Date(i.deleted_at * 1000).toLocaleDateString())}</p></div><div class="passwords-actions"><button class="button secondary small" data-restore="${esc(i.id)}">Restore</button><button class="button danger small" data-purge="${esc(i.id)}">Delete permanently</button></div></article>`).join("") : '<p class="small-note">Trash is empty.</p>'}</div></div>`;
+    panel.querySelectorAll("[data-restore]").forEach((button) =>
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          await api(`/trash/${button.dataset.restore}/restore`, "POST", {});
+          await refreshItems();
+          await renderPasswordTools();
+          toast("Item restored");
+        } catch (e) {
+          toast(e.message, true);
+          button.disabled = false;
+        }
+      }),
+    );
+    panel.querySelectorAll("[data-purge]").forEach((button) =>
+      button.addEventListener("click", () => {
+        const item = items.find((i) => i.id === button.dataset.purge);
+        utility(
+          "Delete permanently?",
+          `<p>This removes <strong>${esc(item.name)}</strong> from the current vault. Existing backups may still contain it.</p><label for="purge-name">Type the item name</label><input id="purge-name" autocomplete="off" required maxlength="100">`,
+          "Delete permanently",
+          async () => {
+            await api(`/trash/${item.id}/purge`, "POST", {
+              confirm: $("purge-name").value,
+            });
+            await renderPasswordTools();
+            toast("Item permanently deleted");
+          },
+          true,
+        );
+      }),
+    );
+  } else {
+    const config = state.demo ? { configured: false } : await api("/clients");
+    if (state.view !== view) return;
+    panel.innerHTML = `<div class="panel settings-panel"><span class="eyebrow">BITWARDEN CLIENTS</span><h2>Connect your devices</h2><p>The compatible service uses Vaultwarden. Your current KagNode vault stays separate and keeps working.</p>${config.configured ? `<div class="setting-row"><div><strong>Self-hosted server URL</strong><p><code>${esc(config.server)}</code></p></div><button class="button secondary small" id="copy-client-server">Copy URL</button></div><p>In the Bitwarden app or extension, choose <strong>Self-hosted</strong>, enter this URL, and sign in with your account on that server.</p><a class="button primary" href="${esc(config.server)}" target="_blank" rel="noopener noreferrer">Open compatible vault ${svg("arrow-up-right")}</a>` : '<div class="notice">The compatible vault has not been connected. Ask your server administrator to enable access for Bitwarden apps and extensions.</div>'}</div><div class="panel settings-panel"><h2>Transfer your existing items</h2><p>Export a Bitwarden JSON file, then import it in the compatible web vault. Passwords, authenticator keys, folders, and notes are included. Backup codes become notes with their used status. Trash is excluded. Nothing is removed from this vault.</p><p class="small-note">This export contains readable passwords. Import it privately, verify your items, then remove the export from your Downloads and Trash.</p><button class="button secondary" id="export-bitwarden">Export for Bitwarden</button></div>`;
+    $("copy-client-server")?.addEventListener("click", () =>
+      copy(config.server, "Server URL copied"),
+    );
+    $("export-bitwarden").addEventListener("click", () => {
+      if (state.demo) return toast("Sign in to export your own vault.");
+      utility(
+        "Export readable vault data",
+        '<p>This file contains passwords and authenticator secrets without encryption. Only continue on your private device.</p><label for="export-password">Master password</label><input type="password" id="export-password" autocomplete="current-password" required maxlength="1024">',
+        "Export unencrypted JSON",
+        async () => {
+          const data = await api("/export/bitwarden", "POST", {
+            password: $("export-password").value,
+            confirm: "unencrypted-export",
+          });
+          $("export-password").value = "";
+          const link = document.createElement("a"),
+            url = URL.createObjectURL(
+              new Blob([JSON.stringify(data, null, 2)], {
+                type: "application/json",
+              }),
+            );
+          link.href = url;
+          link.download = "kagnode-passwords-bitwarden.json";
+          document.body.append(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          toast("Export downloaded. Delete it after verifying the import.");
+        },
+        true,
+      );
+    });
+  }
+}

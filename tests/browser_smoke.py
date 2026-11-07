@@ -20,6 +20,9 @@ VIEWS = (
     "passwords",
     "backup-codes",
     "favorites",
+    "notes",
+    "trash",
+    "clients",
     "generator",
     "security",
     "settings",
@@ -252,6 +255,108 @@ def check(browser, base):
     ).filter(has_text="0 of 2").wait_for()
     page.locator('nav a[data-view="settings"]').click()
 
+    # New Passwords features use the real disposable encrypted vault.
+    page.locator('nav a[data-view="notes"]').click()
+    page.locator("#add-button").click()
+    assert page.locator("#type-note").get_attribute("aria-pressed") == "true"
+    page.locator("#item-name").fill("Private test note")
+    page.locator("#item-folder").fill("Personal")
+    page.locator("#item-notes").fill("Synthetic secure note for browser validation.")
+    page.locator("#save-item").click()
+    page.locator("#item-dialog").wait_for(state="hidden")
+    page.locator(".item-title").filter(has_text="Private test note").click()
+    page.locator("#detail-delete").click()
+    page.get_by_role("button", name="Move to Trash", exact=True).click()
+    page.locator("#utility-dialog").wait_for(state="hidden")
+    page.locator('nav a[data-view="trash"]').click()
+    page.get_by_role("button", name="Restore", exact=True).click()
+    page.get_by_text("Trash is empty.", exact=True).wait_for()
+    page.locator('nav a[data-view="notes"]').click()
+    page.locator(".item-title").filter(has_text="Private test note").wait_for()
+    page.locator('nav a[data-view="clients"]').click()
+    page.locator("#export-bitwarden").click()
+    page.locator("#export-password").fill(PASSWORD)
+    with page.expect_download() as exported:
+        page.get_by_role("button", name="Export unencrypted JSON", exact=True).click()
+    plain = ARTIFACTS / "temporary-synthetic-export.json"
+    exported.value.save_as(plain)
+    value = json.loads(plain.read_text())
+    plain.unlink()
+    note = next(item for item in value["items"] if item["name"] == "Private test note")
+    assert note["type"] == 2
+    assert note["folderId"] in {folder["id"] for folder in value["folders"]}
+    page.locator("#utility-dialog").wait_for(state="hidden")
+    for width in (1440, 390, 320):
+        page.set_viewport_size({"width": width, "height": 900})
+        assert page.evaluate("document.documentElement.scrollWidth") <= width + 1
+        page.screenshot(
+            path=str(ARTIFACTS / f"passwords-clients-{width}.png"), full_page=True
+        )
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.locator('nav a[data-view="settings"]').click()
+
+    # Exercise the shared update controls without running a privileged updater.
+    update_calls = []
+    update_state = {
+        "enabled": True,
+        "installed": "fixture-old",
+        "channel": "preview",
+        "kind": "python",
+        "can_apply": True,
+    }
+
+    def manager_response(route):
+        if route.request.method != "POST":
+            return route.continue_()
+        data = route.request.post_data_json
+        action = data.get("action", "")
+        if not action.startswith("updates."):
+            return route.continue_()
+        assert route.request.headers.get("x-csrf-token")
+        update_calls.append(action)
+        if action == "updates.check":
+            update_state["candidate"] = {
+                "changed": True,
+                "release_id": 42,
+                "version": "fixture-new",
+                "prerelease": True,
+            }
+        if action == "updates.apply":
+            assert data["release_id"] == 42
+            update_state["installed"] = "fixture-new"
+            update_state["candidate"]["changed"] = False
+            update_state["operation"] = {
+                "phase": "complete",
+                "message": "Fixture update complete",
+            }
+        route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(update_state)
+        )
+
+    page.route("**/api/kagnode-account", manager_response)
+    page.evaluate("window.KagNodeAccounts.refresh()")
+    panel = page.locator(".kn-update-panel")
+    panel.get_by_role("button", name="Check for updates", exact=True).click()
+    panel.get_by_role("button", name="Review update", exact=True).click()
+    page.locator(".kn-update-dialog").get_by_role(
+        "button", name="Cancel", exact=True
+    ).click()
+    assert "updates.apply" not in update_calls
+    panel.get_by_role("button", name="Review update", exact=True).click()
+    page.set_viewport_size({"width": 320, "height": 740})
+    assert page.locator(".kn-update-dialog").evaluate(
+        "e=>e.scrollWidth<=e.clientWidth+1"
+    )
+    page.locator(".kn-update-dialog").get_by_role(
+        "button", name="Install update", exact=True
+    ).click()
+    panel.get_by_text(
+        "This source release is already installed.", exact=True
+    ).wait_for()
+    assert update_calls.count("updates.apply") == 1
+    page.unroute("**/api/kagnode-account", manager_response)
+    page.set_viewport_size({"width": 1440, "height": 1000})
+
     page.locator("#change-master").click()
     page.locator("#current-master").fill(PASSWORD)
     changed = PASSWORD + "-changed"
@@ -419,6 +524,10 @@ def check(browser, base):
         "layouts": layouts,
         "page_errors": errors,
         "workflows": [
+            "create a secure note with a folder",
+            "soft-delete and restore a note through Trash",
+            "password-confirmed Bitwarden JSON download",
+            "responsive compatible-client settings",
             "direct routes and reload",
             "setup and unlock return paths",
             "Back/Forward",
@@ -481,7 +590,7 @@ def main():
                 stderr=subprocess.STDOUT,
             )
             try:
-                for _ in range(100):
+                for _ in range(400):
                     if server.poll() is not None:
                         raise RuntimeError(
                             "Disposable server exited; inspect test-artifacts/server.log"
@@ -495,11 +604,17 @@ def main():
                 else:
                     raise RuntimeError("Disposable server did not start")
                 with sync_playwright() as playwright:
-                    browser = playwright.chromium.launch(
+                    engine = getattr(
+                        playwright, os.environ.get("KAGNODE_BROWSER_ENGINE", "chromium")
+                    )
+                    browser = engine.launch(
                         headless=True,
                         executable_path=os.environ.get("KAGNODE_BROWSER_EXECUTABLE")
                         or None,
-                        args=["--no-sandbox", "--disable-dev-shm-usage"],
+                        args=["--no-sandbox", "--disable-dev-shm-usage"]
+                        if os.environ.get("KAGNODE_BROWSER_ENGINE", "chromium")
+                        == "chromium"
+                        else [],
                     )
                     try:
                         check(browser, base)

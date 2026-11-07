@@ -20,7 +20,7 @@ def proxy_address(value):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="KagNode Authenticator — email-based encrypted vaults"
+        description="KagNode Passwords — email-based encrypted vaults"
     )
     parser.add_argument(
         "--host", default=os.environ.get("AUTHENTACTOR_HOST", "0.0.0.0")
@@ -57,9 +57,7 @@ def main():
             "trusted_proxy_count": 1,
             "trusted_proxy_headers": {"x-forwarded-proto", "x-forwarded-host"},
         }
-    print(
-        f"KagNode Authenticator listening on http://{args.host}:{args.port}", flush=True
-    )
+    print(f"KagNode Passwords listening on http://{args.host}:{args.port}", flush=True)
     serve(
         app,
         host=args.host,

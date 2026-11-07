@@ -1,4 +1,4 @@
-name: Validate KagNode Authenticator
+name: Validate KagNode Passwords
 on:
   push:
   pull_request:

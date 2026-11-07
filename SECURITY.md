@@ -1,6 +1,6 @@
 # Security
 
-KagNode Authenticator 0.4.0 is a functional source preview. It has not had an independent security audit and should not yet be your sole store for irreplaceable credentials.
+KagNode Passwords 0.6.0-beta.1 is a functional source preview. It has not had an independent security audit and should not yet be your sole store for irreplaceable credentials.
 
 ## Deployment boundary
 

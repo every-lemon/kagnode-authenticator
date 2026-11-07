@@ -175,6 +175,7 @@ class BackupCodeTests(unittest.TestCase):
         before = self.detail(identifier)["backup_codes"]
         backup = self.client.get("/api/backup").json
         self.send("/items/" + identifier, {}, "DELETE")
+        self.send("/trash/" + identifier + "/purge", {"confirm": "Example recovery"})
         response = self.send("/restore", {"backup": backup, "password": self.password})
         self.assertEqual(response.json["imported"], 1)
         self.assertEqual(self.detail(identifier)["backup_codes"], before)

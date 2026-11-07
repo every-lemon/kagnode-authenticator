@@ -184,7 +184,9 @@ class VaultTests(unittest.TestCase):
         )
         result = self.send("/restore", {"backup": backup, "password": self.password})
         self.assertEqual((result.json["imported"], result.json["skipped"]), (0, 1))
+        name = self.client.get("/api/items/" + first_id).json["item"]["name"]
         self.send("/items/" + first_id, {}, "DELETE")
+        self.send("/trash/" + first_id + "/purge", {"confirm": name})
         self.add(name="Existing other item")
         result = self.send("/restore", {"backup": backup, "password": self.password})
         self.assertEqual((result.json["imported"], result.json["skipped"]), (1, 0))

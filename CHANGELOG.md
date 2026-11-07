@@ -1,3 +1,12 @@
+# 0.6.0-beta.1 — KagNode Passwords preview
+
+- Rename the interface while retaining existing encrypted data, identities and backup format.
+- Add secure notes, folder labels and recoverable Trash with explicit permanent removal.
+- Add a password-confirmed Bitwarden JSON export and Apps & extensions setup page.
+- Integrate optional local-administrator update controls through KagNode CLI.
+- Support an independently configured Vaultwarden engine; actual extension/mobile
+  sign-in needs an HTTPS installation check. Existing vaults are not migrated automatically.
+
 # 0.5.0
 
 - Shared KagNode product styling, mobile controls, and persistent product branding.
