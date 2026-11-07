@@ -1222,7 +1222,7 @@ def create_app(data_dir, preview=False, legacy_email=None):
             ).fetchone()
             if not owner:
                 owner = connection.execute(
-                    "SELECT id FROM accounts ORDER BY created,id LIMIT 1"
+                    "SELECT id FROM accounts ORDER BY rowid LIMIT 1"
                 ).fetchone()
         configured_owner = os.environ.get("KAGNODE_ACCOUNT_ADMIN", "")
         admin = state["account_id"] == (configured_owner or (owner[0] if owner else ""))

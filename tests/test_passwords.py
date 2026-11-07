@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -104,6 +105,9 @@ class PasswordsTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/items").json["items"], before)
 
     def test_new_account_cannot_see_trash_or_request_admin_updates(self):
+        # Clock changes and same-second signups must never select a newer owner.
+        with sqlite3.connect(self.app.extensions["vault_testing"]["db_path"]) as db:
+            db.execute("UPDATE accounts SET created=4000000000")
         uid = self.send("/items", {"name": "Owner note", "notes": "private"}).json["id"]
         self.send("/items/" + uid, method="DELETE")
         other = self.app.test_client()
