@@ -1,8 +1,9 @@
 {
-  "repository": "kagnode-authenticator",
+  "repository": "kagnode-passwords",
   "version_file": "packaging/build-deb.sh",
   "version_pattern": "version=([^\\s]+)",
   "kind": "application",
   "license": "AGPL-3.0-only",
-  "revision": 1
+  "revision": 2,
+  "source_package": "kagnode-authenticator-source"
 }

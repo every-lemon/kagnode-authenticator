@@ -1,5 +1,10 @@
 # 0.6.0-beta.1 — KagNode Passwords preview
 
+## 0.6.0-beta.1 packaging.2
+
+- Renamed the GitHub repository to kagnode-passwords and updated source/download links.
+- Preserved legacy package identities, account client IDs and existing vault storage paths.
+
 - Rename the interface while retaining existing encrypted data, identities and backup format.
 - Add secure notes, folder labels and recoverable Trash with explicit permanent removal.
 - Add a password-confirmed Bitwarden JSON export and Apps & extensions setup page.
