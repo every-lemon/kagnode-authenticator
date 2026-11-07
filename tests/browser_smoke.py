@@ -28,6 +28,40 @@ EMAIL = "owner@browser.test"
 PASSWORD = "Only-for-disposable-browser-tests!2048"
 
 
+def check_quick_search(page, theme, width):
+    page.keyboard.press("Control+k")
+    field = page.locator("#global-search")
+    field.wait_for(state="visible")
+    assert field.evaluate("e=>document.activeElement===e")
+    rows = page.locator("#global-results .quick-result")
+    assert rows.count() > 1
+    assert rows.first.evaluate("e=>getComputedStyle(e).display==='flex'")
+    assert rows.first.evaluate(
+        "e=>{let a=e.querySelector('strong').getBoundingClientRect(),b=e.querySelector('small').getBoundingClientRect();return b.top>=a.bottom}"
+    )
+    assert rows.first.evaluate("e=>e.clientWidth>e.parentElement.clientWidth-30")
+    assert page.locator("#utility-dialog").evaluate("e=>e.scrollWidth<=e.clientWidth+1")
+    first = field.get_attribute("aria-activedescendant")
+    page.keyboard.press("ArrowDown")
+    assert field.get_attribute("aria-activedescendant") != first
+    field.fill("Google")
+    assert rows.count() == 1
+    page.keyboard.press("Enter")
+    page.locator("#detail-dialog").wait_for(state="visible")
+    page.locator("#detail-content .close-dialog").click()
+    page.keyboard.press("Control+k")
+    page.keyboard.press("Control+k")  # Reopening cannot clear the new dialog.
+    field.wait_for(state="visible")
+    field.fill("nothing-matches-this-test")
+    page.locator(".no-search-results").wait_for(state="visible")
+    assert field.get_attribute("aria-expanded") == "false"
+    field.fill("")
+    if width in (1440, 390):
+        page.screenshot(path=str(ARTIFACTS / f"quick-search-{theme}-{width}.png"))
+    page.keyboard.press("Escape")
+    page.locator("#utility-dialog").wait_for(state="hidden")
+
+
 def check(browser, base):
     errors, layouts = [], []
     for theme in ("dark", "light"):
@@ -52,6 +86,8 @@ def check(browser, base):
                 layouts.append(
                     {"theme": theme, "width": width, "view": view, "overflow": False}
                 )
+                if view == "overview":
+                    check_quick_search(page, theme, width)
                 if (width, view) in (
                     (1440, "overview"),
                     (390, "authenticators"),

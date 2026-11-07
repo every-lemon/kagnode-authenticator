@@ -2237,10 +2237,31 @@ dialog[open] {
 .utility-modal {
   max-width: 560px;
 }
+.quick-search-dialog {
+  padding: 16px;
+}
+.quick-search-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.quick-search-heading .search-box {
+  min-width: 0;
+  max-width: none;
+}
+.quick-search-heading input {
+  width: 100%;
+  min-width: 0;
+}
+.quick-search-heading .close-dialog {
+  flex-shrink: 0;
+}
 .quick-search-results {
   display: grid;
   gap: 5px;
-  max-height: 350px;
+  max-height: min(390px, 55dvh);
   overflow: auto;
   margin-top: 15px;
 }
@@ -2254,22 +2275,81 @@ dialog[open] {
   border-radius: 12px;
   background: transparent;
   text-align: left;
+  color: var(--text);
+  min-height: 66px;
 }
 .quick-result:hover,
-.quick-result:focus {
+.quick-result:focus-visible,
+.quick-result[aria-selected="true"] {
   background: var(--raised);
 }
-.quick-result > div {
+.quick-result .site-logo {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+.quick-result > svg {
+  flex-shrink: 0;
+  width: 16px;
+  color: var(--subtle);
+  margin-left: 8px;
+}
+.quick-result-copy {
   flex: 1;
   min-width: 0;
 }
 .quick-result strong {
   display: block;
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .quick-result small {
+  display: block;
+  margin-top: 4px;
   font-size: 11px;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-search-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 13px 2px 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--subtle);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.no-search-results {
+  display: grid;
+  gap: 8px;
+  padding: 35px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.no-search-results strong {
+  color: var(--text);
+  font-weight: 500;
+}
+@media (max-width: 500px) {
+  .quick-search-hint {
+    display: none;
+  }
+  .quick-search-dialog {
+    padding: 12px;
+  }
+  .quick-result {
+    padding: 10px 8px;
+    gap: 10px;
+  }
 }
 .toasts {
   position: fixed;

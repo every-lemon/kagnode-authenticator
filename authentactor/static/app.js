@@ -1472,7 +1472,7 @@ function bind() {
     $("detail-content").replaceChildren();
   });
   $("utility-dialog").addEventListener("close", () => {
-    $("utility-content").replaceChildren();
+    if (!$("utility-dialog").open) $("utility-content").replaceChildren();
   });
   $("item-dialog").addEventListener("close", () => {
     $("item-password").value = "";
@@ -1526,9 +1526,24 @@ function bind() {
 }
 
 function openQuickSearch() {
+  if (!state.unlocked) return;
   closeDialogs();
   $("utility-content").innerHTML =
-    `<div class="quick-search-dialog"><div class="search-box">${svg("search")}<input id="global-search" aria-label="Search all vault items" placeholder="Search your entire vault…" autocomplete="off"><kbd>Esc</kbd></div><div id="global-results"></div><div class="quick-search-footer">Search by name, account, or website</div></div>`;
+    `<div class="quick-search-dialog"><div class="quick-search-heading"><div class="search-box"><span>${svg("search")}</span><input id="global-search" role="combobox" aria-label="Search all vault items" aria-autocomplete="list" aria-expanded="true" aria-controls="global-results" placeholder="Search your entire vault…" autocomplete="off"></div><button class="icon-button close-dialog" aria-label="Close search">${svg("x")}</button></div><div id="global-results" class="quick-search-results" role="listbox" aria-label="Matching vault items"></div><div class="quick-search-footer"><span id="quick-search-status" role="status">Search by name, account, or website</span><span class="quick-search-hint">↑ ↓ to select · Enter to open</span></div></div>`;
+  let selected = 0;
+  const select = (index) => {
+    const rows = [...$("global-results").querySelectorAll("button")];
+    if (!rows.length) {
+      $("global-search").removeAttribute("aria-activedescendant");
+      return;
+    }
+    selected = (index + rows.length) % rows.length;
+    rows.forEach((row, i) =>
+      row.setAttribute("aria-selected", String(i === selected)),
+    );
+    $("global-search").setAttribute("aria-activedescendant", rows[selected].id);
+    rows[selected].scrollIntoView({ block: "nearest", behavior: "instant" });
+  };
   const render = () => {
     const q = $("global-search").value.toLowerCase().trim();
     const found = state.items
@@ -1541,11 +1556,18 @@ function openQuickSearch() {
     $("global-results").innerHTML = found.length
       ? found
           .map(
-            (i) =>
-              `<button type="button" class="global-result" data-search-id="${esc(i.id)}">${logo(i)}<span><strong>${esc(i.name)}</strong><small>${esc(i.username || domain(i.url))}</small></span>${svg("arrow-right")}</button>`,
+            (i, index) =>
+              `<button type="button" class="quick-result" role="option" aria-selected="false" id="global-result-${index}" data-search-id="${esc(i.id)}">${logo(i)}<span class="quick-result-copy"><strong>${esc(i.name)}</strong><small>${esc(i.username || domain(i.url) || "Personal account")}</small></span>${svg("arrow-right")}</button>`,
           )
           .join("")
-      : '<p class="no-search-results">No matching items.</p>';
+      : '<div class="no-search-results"><strong>No matching items</strong><span>Try another name, account, or website.</span></div>';
+    $("global-search").setAttribute("aria-expanded", String(found.length > 0));
+    $("quick-search-status").textContent = found.length
+      ? found.length === 8
+        ? "Showing up to 8 matches"
+        : found.length + " matching items"
+      : "No matches";
+    select(0);
   };
   $("global-search").addEventListener("input", render);
   $("global-results").addEventListener("click", (e) => {
@@ -1556,14 +1578,18 @@ function openQuickSearch() {
     }
   });
   $("global-search").addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      select(selected + (e.key === "ArrowDown" ? 1 : -1));
+    }
     if (e.key === "Enter") {
       e.preventDefault();
-      const first = $("global-results").querySelector("button");
-      if (first) first.click();
+      $("global-results").querySelector('[aria-selected="true"]')?.click();
     }
   });
   render();
   $("utility-dialog").showModal();
+  $("global-search").focus();
 }
 
 function setLayout(grid) {
