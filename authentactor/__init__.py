@@ -1,1 +1,1 @@
-"""KagNode Authenticator: a self-hosted, single-owner encrypted vault."""
+"""KagNode Passwords: encrypted per-account vaults, retaining legacy package IDs."""

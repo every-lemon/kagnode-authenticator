@@ -1,4 +1,4 @@
-/* KagNode Authenticator — shared colors, type, controls and responsive shell. */
+/* KagNode Passwords — shared colors, type, controls and responsive shell. */
 :root {
   color-scheme: dark;
   --bg: #101010;
@@ -3036,4 +3036,43 @@ dialog[open] {
   border-color: #35548b;
   color: #c8ddff;
   font-weight: 600;
+}
+
+/* Passwords: folders, recoverable deletion and compatible-client setup. */
+.passwords-tools {
+  display: grid;
+  gap: 20px;
+  max-width: 1040px;
+}
+.passwords-tools .settings-panel {
+  min-width: 0;
+}
+.passwords-tools p {
+  line-height: 1.7;
+}
+.passwords-tools code {
+  overflow-wrap: anywhere;
+}
+.passwords-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.passwords-tools .setting-row {
+  gap: 20px;
+}
+.type-picker {
+  flex-wrap: wrap;
+}
+#item-folder {
+  margin-bottom: 18px;
+}
+@media (max-width: 600px) {
+  .passwords-tools .setting-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .passwords-actions {
+    width: 100%;
+  }
 }

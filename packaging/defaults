@@ -1,4 +1,4 @@
-# KagNode Authenticator compatibility package defaults to port 80.
+# KagNode Passwords compatibility package defaults to port 80.
 AUTHENTACTOR_HOST=0.0.0.0
 AUTHENTACTOR_PORT=80
 AUTHENTACTOR_DATA=/var/lib/authentactor

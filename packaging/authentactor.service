@@ -1,5 +1,5 @@
 [Unit]
-Description=KagNode Authenticator personal encrypted vault
+Description=KagNode Passwords personal encrypted vault
 After=network.target
 
 [Service]

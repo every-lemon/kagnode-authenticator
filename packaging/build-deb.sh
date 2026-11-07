@@ -2,7 +2,7 @@
 # Prepared for the next step. The preview task does not execute this script.
 set -eu
 source_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-version=0.5.0
+version=0.6.0-beta.1
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT HUP INT TERM
 root="$stage/authentactor"
@@ -45,7 +45,7 @@ Priority: optional
 Architecture: all
 Depends: python3 (>= 3.10), python3-flask (>= 3.0), python3-cryptography (>= 41), adduser
 Maintainer: KagNode contributors <every-lemon@users.noreply.github.com>
-Description: KagNode Authenticator personal encrypted vault
+Description: KagNode Passwords personal encrypted vault
  Self-hosted email-based encrypted vaults for TOTP, passwords and backup codes.
  Stores the vault encrypted on disk and listens on port 80 by default.
 CONTROL
@@ -62,7 +62,7 @@ if [ "$1" = configure ]; then
         systemctl daemon-reload
         systemctl enable authentactor.service
         if ! systemctl restart authentactor.service; then
-            echo 'KagNode Authenticator could not start. Check whether port 80 is occupied and review /etc/default/authentactor.' >&2
+            echo 'KagNode Passwords could not start. Check whether port 80 is occupied and review /etc/default/authentactor.' >&2
         fi
     fi
 fi

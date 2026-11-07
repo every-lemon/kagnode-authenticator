@@ -8,7 +8,7 @@
       name="description"
       content="Your self-hosted home for authenticator codes and passwords."
     />
-    <title>KagNode. Authenticator</title>
+    <title>KagNode. Passwords</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <script src="/static/theme.js"></script>
     <link rel="stylesheet" href="/static/style.css" />
@@ -45,7 +45,7 @@
             ><img class="brand-mark" src="/static/logo.svg" alt="" /><span
               class="brand-copy"
               ><strong>KagNode<span class="brand-period">.</span></strong
-              ><small>Authenticator</small></span
+              ><small>Passwords</small></span
             ></a
           ><button
             type="button"
@@ -127,12 +127,12 @@
         </div>
         <footer class="auth-footer">
           <span data-icon="server"></span>Stored on your server<span
-            >Preview 0.5.0</span
+            >Preview 0.6.0-beta.1</span
           >
         </footer>
       </div>
-      <aside class="auth-art" aria-label="About KagNode Authenticator">
-        <span class="eyebrow">KAGNODE AUTHENTICATOR</span>
+      <aside class="auth-art" aria-label="About KagNode Passwords">
+        <span class="eyebrow">KAGNODE PASSWORDS</span>
         <h2>Passwords and codes.</h2>
         <p>
           Store passwords, authenticator keys, and backup codes. Each account
@@ -222,7 +222,7 @@
           ><img class="brand-mark" src="/static/logo.svg" alt="" /><span
             class="brand-copy"
             ><strong>KagNode<span class="brand-period">.</span></strong
-            ><small>Authenticator</small></span
+            ><small>Passwords</small></span
           ></a
         ><a
           class="website-link"
@@ -268,6 +268,15 @@
         </nav>
         <p class="nav-label tools-label">TOOLS</p>
         <nav aria-label="Vault tools">
+          <a class="nav-item" data-view="notes" href="/notes"
+            ><span data-icon="edit"></span>Secure notes</a
+          >
+          <a class="nav-item" data-view="trash" href="/trash"
+            ><span data-icon="trash"></span>Trash</a
+          >
+          <a class="nav-item" data-view="clients" href="/clients"
+            ><span data-icon="globe"></span>Apps &amp; extensions</a
+          >
           <a class="nav-item" data-view="generator" href="/generator"
             ><span data-icon="sparkles"></span>Password generator</a
           ><a class="nav-item" data-view="security" href="/security"
@@ -288,7 +297,7 @@
           <span data-icon="lock"></span>
           <div>
             <strong>Encrypted vault</strong
-            ><small>KagNode. Authenticator · 0.5.0</small>
+            ><small>KagNode. Passwords · 0.6.0-beta.1</small>
           </div>
         </div>
       </aside>
@@ -603,6 +612,12 @@
           </p>
           <div id="security-items" class="security-items"></div>
         </section>
+        <section
+          id="passwords-tools"
+          class="passwords-tools"
+          hidden
+          aria-live="polite"
+        ></section>
         <section id="settings-view" hidden>
           <section
             class="panel settings-panel"
@@ -706,7 +721,7 @@
           </div>
         </section>
         <footer class="main-footer">
-          <span>KagNode. Authenticator</span
+          <span>KagNode. Passwords</span
           ><a
             href="https://github.com/every-lemon/kagnode-authenticator"
             target="_blank"
@@ -732,6 +747,9 @@
         </div>
         <div class="modal-body">
           <div class="type-picker">
+            <button type="button" id="type-note" class="type-option">
+              <span data-icon="edit"></span>Secure note
+            </button>
             <button
               type="button"
               id="type-password"
@@ -879,6 +897,13 @@
             </p>
           </div>
           <div class="field">
+            <label for="item-folder">Folder <span>optional</span></label>
+            <input
+              id="item-folder"
+              maxlength="80"
+              placeholder="Personal, work, family…"
+              autocomplete="off"
+            />
             <label for="item-notes">Notes <span>optional</span></label
             ><textarea
               id="item-notes"

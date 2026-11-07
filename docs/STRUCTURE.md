@@ -14,3 +14,8 @@
 Do not publish .git, runtime data, private directories, credentials, caches or local build scratch. Existing generated installers, minified web assets, checksums and compatibility artwork paths are intentionally retained.
 
 Use `python3 scripts/format_web.py --check` for first-party CSS/JavaScript and plain HTML source (Node.js is a build-time tool only). Prettier 3.7.4 is pinned. Generated HTML/bundles and template expression whitespace are preserved separately.
+
+`authentactor/passwords.py` defines the explicit Bitwarden JSON export. Vault
+routes and per-account encryption stay in `server.py`; `static/app.js` contains
+the Notes, Trash and Apps & extensions views. `ecosystem_updates.py` is only a
+local Unix-socket client, not a privileged updater.

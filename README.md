@@ -1,19 +1,25 @@
 <p align="center"><img src="assets/kagnode-wordmark.svg" width="440" alt="KagNode."></p>
 
-# KagNode Authenticator
+# KagNode Passwords
 
 ## Overview
+
+KagNode Passwords is the new name for KagNode Authenticator. Existing emails, master passwords, encrypted vaults, backup files and service/package identities remain compatible.
 
 Independent email-based accounts with encrypted authenticator vaults and backup codes.
 
 ## Release status
 
-Product source: **0.5.0**. Packaging preview: **0.5.0-packaging.1**.
+Product source: **0.6.0-beta.1**. Packaging preview: **0.6.0-beta.1.packaging.1**.
 
 Packaging prereleases do not change the latest stable release or establish new hardware or service compatibility. See [verification](docs/VERIFICATION.md) and [changelog](CHANGELOG.md).
 
 ## Features
 
+- Secure notes and folder labels alongside saved logins, TOTP and recovery codes.
+- Recoverable Trash with explicit restore and permanent removal.
+- Optional Vaultwarden service for Bitwarden browser extensions and mobile applications. Existing vault data transfers only through an explicit export/import; the two stores do not silently synchronize.
+- Local-administrator update controls backed by the KagNode CLI manager.
 - Separate encrypted vaults for multiple email accounts.
 - TOTP entries, passwords and backup-code storage.
 - Dedicated account and vault routes, export and recovery controls.
@@ -69,6 +75,8 @@ Install the formatting dependencies from `requirements-format.txt`. Package buil
 
 ## Documentation
 
+- [Passwords and Bitwarden clients](docs/PASSWORDS.md)
+- [Ecosystem installation and updates](docs/ECOSYSTEM.md)
 - [Repository structure](docs/STRUCTURE.md)
 - [Operations](docs/OPERATIONS.md)
 - [Packages and release process](docs/PACKAGING.md)

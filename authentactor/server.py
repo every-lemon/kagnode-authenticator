@@ -36,7 +36,7 @@ from flask import (
 from werkzeug.exceptions import HTTPException
 from .storage import email_address, initialize_database
 
-VERSION = "0.5.0"
+VERSION = "0.6.0-beta.1"
 KDF = {"name": "scrypt", "n": 32768, "r": 8, "p": 1}
 COOKIE = "authentactor_session"
 PAGE_PATHS = (
@@ -45,6 +45,9 @@ PAGE_PATHS = (
     "/passwords",
     "/backup-codes",
     "/favorites",
+    "/notes",
+    "/trash",
+    "/clients",
     "/generator",
     "/security",
     "/settings",
@@ -255,8 +258,13 @@ def clean_item(data, previous=None):
         data.get("backup_codes", previous.get("backup_codes", [])),
         previous.get("backup_codes", []),
     )
-    if not password and not otp["secret"] and not backup_codes:
-        raise VaultError("Add a password, an authenticator secret, or backup codes.")
+    if not password and not otp["secret"] and not backup_codes and not notes.strip():
+        raise VaultError(
+            "Add a password, an authenticator secret, backup codes, or a secure note."
+        )
+    folder = str(data.get("folder", previous.get("folder", ""))).strip()
+    if len(folder) > 80 or any(ord(c) < 32 for c in folder):
+        raise VaultError("Use a folder name of up to 80 characters.")
     icon = str(data.get("icon", ""))
     if icon:
         try:
@@ -280,6 +288,8 @@ def clean_item(data, previous=None):
         "notes": notes,
         "icon": icon,
         "favorite": bool(data.get("favorite", False)),
+        "folder": folder,
+        "deleted_at": previous.get("deleted_at"),
         "backup_codes": backup_codes,
         "created_at": previous.get("created_at", int(time.time())),
         "updated_at": int(time.time()),
@@ -828,7 +838,12 @@ def create_app(data_dir, preview=False, legacy_email=None):
             counts = Counter(i["password"] for i in vault["items"] if i["password"])
             now = time.time()
             return jsonify(
-                items=[summary(i, counts, now) for i in vault["items"]],
+                items=[
+                    summary(i, counts, now)
+                    for i in vault["items"]
+                    if not i.get("deleted_at")
+                ],
+                trash_count=sum(bool(i.get("deleted_at")) for i in vault["items"]),
                 settings=vault["settings"],
                 server_time=now,
             )
@@ -848,7 +863,7 @@ def create_app(data_dir, preview=False, legacy_email=None):
                         "expires_at": (int(now // i["period"]) + 1) * i["period"],
                     }
                     for i in vault["items"]
-                    if i["secret"]
+                    if i["secret"] and not i.get("deleted_at")
                 ],
             )
 
@@ -858,7 +873,7 @@ def create_app(data_dir, preview=False, legacy_email=None):
         with mutex:
             vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
             item = next((i for i in vault["items"] if i["id"] == item_id), None)
-            if not item:
+            if not item or item.get("deleted_at"):
                 raise VaultError("Item not found.", 404)
             return jsonify(item=item)
 
@@ -887,7 +902,12 @@ def create_app(data_dir, preview=False, legacy_email=None):
             if index is None:
                 raise VaultError("Item not found.", 404)
             if request.method == "DELETE":
-                vault["items"].pop(index)
+                vault["items"][index].setdefault("deleted_at", None)
+                vault["items"][index]["deleted_at"] = vault["items"][index][
+                    "deleted_at"
+                ] or int(time.time())
+            elif vault["items"][index].get("deleted_at"):
+                raise VaultError("Restore this item before editing it.", 409)
             elif set(body) == {"favorite"}:
                 vault["items"][index]["favorite"] = bool(body["favorite"])
             else:
@@ -909,7 +929,7 @@ def create_app(data_dir, preview=False, legacy_email=None):
                     (c for c in item.get("backup_codes", []) if c["id"] == code_id),
                     None,
                 )
-                if item
+                if item and not item.get("deleted_at")
                 else None
             )
             if code is None:
@@ -927,6 +947,98 @@ def create_app(data_dir, preview=False, legacy_email=None):
                 used_at=code["used_at"],
                 remaining=sum(not c["used"] for c in item["backup_codes"]),
             )
+
+    @app.get("/api/trash")
+    @authenticated
+    def trash_items():
+        with mutex:
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
+            return jsonify(
+                items=[
+                    {k: item.get(k) for k in ("id", "name", "folder", "deleted_at")}
+                    for item in vault["items"]
+                    if item.get("deleted_at")
+                ]
+            )
+
+    @app.post("/api/trash/<item_id>/<action>")
+    @authenticated
+    def trash_action(item_id, action):
+        if action not in ("restore", "purge"):
+            raise VaultError("Unknown trash action.", 404)
+        body = json_body()
+        with mutex:
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
+            item = next(
+                (
+                    i
+                    for i in vault["items"]
+                    if i["id"] == item_id and i.get("deleted_at")
+                ),
+                None,
+            )
+            if not item:
+                raise VaultError("Trashed item not found.", 404)
+            if action == "purge":
+                if body.get("confirm") != item["name"]:
+                    raise VaultError("Enter the item name to permanently delete it.")
+                vault["items"].remove(item)
+            else:
+                item["deleted_at"] = None
+            write_vault(vault, g.vault_session["key"], g.vault_session["account_id"])
+        return jsonify(ok=True)
+
+    @app.get("/api/clients")
+    @authenticated
+    def clients():
+        from urllib.parse import urlsplit
+
+        origin = os.environ.get("KAGNODE_PASSWORDS_BITWARDEN_URL", "").rstrip("/")
+        parsed = urlsplit(origin)
+        if origin and (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or parsed.path
+        ):
+            origin = ""
+        return jsonify(
+            server=origin,
+            configured=bool(origin),
+            engine="Vaultwarden",
+            existing_vault="Separate encrypted vault; transfer is explicit, not automatic sync.",
+        )
+
+    @app.post("/api/export/bitwarden")
+    @authenticated
+    def export_bitwarden():
+        from .passwords import bitwarden_export
+
+        body = json_body()
+        password = body.get("password")
+        if (
+            not isinstance(password, str)
+            or len(password) > 1024
+            or body.get("confirm") != "unencrypted-export"
+        ):
+            raise VaultError(
+                "Confirm the unencrypted export and enter your master password."
+            )
+        with mutex:
+            salt, _ = row(g.vault_session["account_id"])
+            if not secrets.compare_digest(
+                derive_key(password, salt), g.vault_session["key"]
+            ):
+                raise VaultError("Current master password is incorrect.", 403)
+            vault = read_vault(g.vault_session["key"], g.vault_session["account_id"])
+            response = jsonify(bitwarden_export(vault["items"]))
+        response.headers["Content-Disposition"] = (
+            'attachment; filename="kagnode-passwords-bitwarden.json"'
+        )
+        return response
 
     @app.post("/api/parse-totp")
     @authenticated
@@ -1042,6 +1154,12 @@ def create_app(data_dir, preview=False, legacy_email=None):
             items = []
             for data in imported["items"]:
                 item = clean_item(data)
+                deleted = data.get("deleted_at")
+                if deleted is not None and (
+                    type(deleted) not in (int, float) or not 0 < deleted < 32503680000
+                ):
+                    raise ValueError()
+                item["deleted_at"] = deleted
                 item["id"] = str(uuid.UUID(data["id"]))
                 items.append(item)
         except (KeyError, TypeError, ValueError, InvalidToken):
