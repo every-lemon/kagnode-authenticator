@@ -1089,6 +1089,40 @@ def create_app(data_dir, preview=False, legacy_email=None):
                     sessions.pop(token, None)
             return new_session(key, vault, account_id)
 
+    from .account_sync import ProfileLinks, AccountLinkError
+
+    profile_links = ProfileLinks(directory / "account-sync", "kagnode-authenticator")
+    app.extensions["kagnode_account"] = profile_links
+
+    @app.route("/api/kagnode-account", methods=["GET", "POST"])
+    @authenticated
+    def kagnode_account():
+        state = g.vault_session
+        with connect() as connection:
+            owner = connection.execute(
+                "SELECT account_id FROM legacy_vault_owners WHERE legacy_id=1"
+            ).fetchone()
+            if not owner:
+                owner = connection.execute(
+                    "SELECT id FROM accounts ORDER BY created,id LIMIT 1"
+                ).fetchone()
+        configured_owner = os.environ.get("KAGNODE_ACCOUNT_ADMIN", "")
+        admin = state["account_id"] == (configured_owner or (owner[0] if owner else ""))
+        try:
+            body = json_body() if request.method == "POST" else {}
+            return jsonify(
+                profile_links.handle(
+                    state["account_id"],
+                    state["email"],
+                    admin,
+                    str(body.get("action", "state")),
+                    body,
+                    request.host_url.rstrip("/"),
+                )
+            )
+        except AccountLinkError as error:
+            raise VaultError(str(error), error.status)
+
     app.extensions["vault_testing"] = {
         "sessions": sessions,
         "read": read_vault,

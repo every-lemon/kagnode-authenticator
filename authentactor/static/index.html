@@ -17,8 +17,15 @@
     <link rel="stylesheet" href="/static/kagnode-ui.css" />
     <link rel="stylesheet" href="/static/kagnode-scroll.css" />
     <script src="/static/kagnode-scroll.js" defer></script>
+    <link rel="stylesheet" href="/static/kagnode-account.css" />
+    <script src="/static/kagnode-account.js" defer></script>
   </head>
-  <body data-kn-manual-navigation class="kn-ui" data-product="authenticator">
+  <body
+    data-kn-account-app="authenticator"
+    data-kn-manual-navigation
+    class="kn-ui"
+    data-product="authenticator"
+  >
     <div id="loading" class="loading" role="status" aria-live="polite">
       <div class="loading-strip"></div>
       <img class="loading-logo" src="/static/logo.svg" alt="KagNode." /><span
@@ -182,6 +189,7 @@
           ><strong id="topbar-current">Overview</strong>
         </div>
         <div class="topbar-right">
+          <span class="kn-profile-name" data-kn-account-name>Account</span>
           <span id="demo-pill" class="pill blue" hidden>Demo vault</span
           ><button
             type="button"
@@ -195,6 +203,7 @@
           ><button
             type="button"
             class="avatar"
+            data-kn-account-avatar
             data-view="settings"
             aria-label="Vault settings"
           >

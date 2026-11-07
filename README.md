@@ -18,6 +18,8 @@ Packaging prereleases do not change the latest stable release or establish new h
 - TOTP entries, passwords and backup-code storage.
 - Dedicated account and vault routes, export and recovery controls.
 
+Optional KagNode Account linking syncs your display name and photo after explicit approval. Your local application administrator can disable it. Local sign-in and permissions stay independent.
+
 ## Requirements
 
 Python 3.12 for the validated development environment; HTTPS for remote use. See the existing reverse-proxy and vault setup instructions.
@@ -71,6 +73,7 @@ Install the formatting dependencies from `requirements-format.txt`. Package buil
 - [Operations](docs/OPERATIONS.md)
 - [Packages and release process](docs/PACKAGING.md)
 - [Verification and limits](docs/VERIFICATION.md)
+- [KagNode Account linking](docs/ACCOUNT-SYNC.md)
 - [Changelog](CHANGELOG.md)
 
 ## Licensing

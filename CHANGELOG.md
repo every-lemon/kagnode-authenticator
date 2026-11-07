@@ -37,3 +37,7 @@
 ## 0.1.0 — original local preview
 
 - Authentactor single-owner vault, TOTP codes, password storage, generator, encrypted backup/restore and master-password rotation.
+
+## Account profile integration preview
+
+Added optional KagNode Account display-name/photo linking, local administrator disable controls and private credential storage. Existing local account authentication and data remain independent.
